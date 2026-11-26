@@ -1,0 +1,129 @@
+/* Fontin design tokens — everything sits on an 8px grid (4px for hairline nudges). */
+:root {
+  --sp-4: 4px;
+  --sp-8: 8px;
+  --sp-12: 12px;
+  --sp-16: 16px;
+  --sp-24: 24px;
+  --sp-32: 32px;
+  --sp-40: 40px;
+  --sp-48: 48px;
+  --sp-56: 56px;
+  --sp-64: 64px;
+
+  --r-8: 8px;
+  --r-12: 12px;
+  --r-16: 16px;
+  --r-24: 24px;
+  --r-full: 999px;
+
+  /* Brand */
+  --ink: #121418;
+  --paper: #f4f4f0;
+  --mint: #7df2a6;
+  --mint-ink: #0c2a18;
+  --mint-soft: rgba(125, 242, 166, 0.12);
+  --mint-glow: rgba(125, 242, 166, 0.35);
+
+  /* Surfaces */
+  --bg: #08090b;
+  --panel: #0f1114;
+  --raised: #15181c;
+  --raised-2: #1b1f24;
+  --hover: rgba(255, 255, 255, 0.04);
+  --press: rgba(255, 255, 255, 0.07);
+  --line: rgba(255, 255, 255, 0.06);
+  --line-2: rgba(255, 255, 255, 0.1);
+
+  /* Text */
+  --text: #f4f4f0;
+  --text-2: #a3a8b0;
+  --text-3: #6b7079;
+  --text-4: #464a52;
+
+  --danger: #ff6b7a;
+  --heart: #ff5c8a;
+
+  --font-ui: "Inter Variable", "Inter", system-ui, sans-serif;
+  --font-display: "Urbanist Variable", "Inter Variable", system-ui, sans-serif;
+
+  --shadow-pop: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--line-2);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 24px;
+  font-feature-settings: "cv11", "ss01", "ss03";
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--mint);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--mint);
+  color: var(--ink);
+}
+
+/* Thin, quiet scrollbars */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border: 4px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.16);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.eyebrow {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
