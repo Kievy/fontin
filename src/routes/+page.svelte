@@ -7,12 +7,15 @@
   import DetailPanel from "$lib/components/DetailPanel.svelte";
   import Toasts from "$lib/components/Toasts.svelte";
   import Settings from "$lib/components/Settings.svelte";
+  import UpdateBanner from "$lib/components/UpdateBanner.svelte";
+  import { startUpdateChecks } from "$lib/updater.svelte";
   import { init, ui, data, select } from "$lib/store.svelte";
 
   let searchEl: HTMLInputElement | undefined = $state();
 
   onMount(() => {
     init();
+    startUpdateChecks();
   });
 
   function onKey(e: KeyboardEvent) {
@@ -43,6 +46,7 @@
   {#if data.detail && !ui.settingsOpen}<DetailPanel />{/if}
 </div>
 <Toasts />
+<UpdateBanner />
 
 <style>
   .app {

@@ -2,6 +2,8 @@
   import Logo from "./Logo.svelte";
   import Toggle from "./Toggle.svelte";
   import { onMount } from "svelte";
+  import { getVersion } from "@tauri-apps/api/app";
+  import { updater, checkForUpdates, installUpdate } from "$lib/updater.svelte";
   import { api, type AppSettings } from "$lib/api";
   import { data, toast, prefs, setTheme } from "$lib/store.svelte";
   import type { ThemePref } from "$lib/theme";
@@ -18,7 +20,9 @@
   let settings = $state<AppSettings | null>(null);
   let saving = $state<keyof AppSettings | null>(null);
 
+  let version = $state("");
   onMount(async () => {
+    getVersion().then((v) => (version = v));
     try {
       settings = await api.getSettings();
     } catch (e) {
@@ -113,6 +117,33 @@
     </div>
   </section>
 
+  <section>
+    <span class="eyebrow">Atualizações</span>
+    <div class="group">
+      <div class="option">
+        <div class="text">
+          <span class="title">Versão {version}</span>
+          <span class="desc">
+            {#if updater.available}
+              Fontin {updater.available.version} está disponível.
+            {:else}
+              O Fontin verifica novas versões no GitHub automaticamente.
+            {/if}
+          </span>
+        </div>
+        {#if updater.available}
+          <button class="btn primary" disabled={updater.progress !== null} onclick={installUpdate}>
+            {updater.progress === null ? "Atualizar e reiniciar" : `Baixando ${Math.round(updater.progress * 100)}%`}
+          </button>
+        {:else}
+          <button class="btn" disabled={updater.checking} onclick={() => checkForUpdates(true)}>
+            {updater.checking ? "Verificando…" : "Verificar agora"}
+          </button>
+        {/if}
+      </div>
+    </div>
+  </section>
+
   <div class="cards">
     <div class="card">
       <span class="eyebrow">Como funciona</span>
@@ -192,6 +223,29 @@
     font-size: 13px;
     line-height: 16px;
     color: var(--text-3);
+  }
+  .btn {
+    flex: none;
+    height: 32px;
+    padding: 0 var(--sp-16);
+    border-radius: var(--r-8);
+    background: var(--raised-2);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .btn:hover:not(:disabled) {
+    background: var(--press);
+  }
+  .btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+  .btn.primary {
+    background: var(--mint);
+    color: var(--ink);
+    box-shadow: none;
   }
   .segmented {
     display: flex;

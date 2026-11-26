@@ -39,6 +39,21 @@
       "icons/icon.ico"
     ],
     "shortDescription": "Gerenciador de fontes: ative sem instalar.",
-    "category": "Utility"
+    "category": "Utility",
+    "createUpdaterArtifacts": true,
+    "publisher": "Kievy",
+    "homepage": "https://github.com/Kievy/fontin",
+    "copyright": "MIT"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhCMTAyNEU2RDZDM0Y1NzUKUldSMTljUFc1aVFRaTlsWHRYN1E1S3kvbkZhNE9iRHhwS1BJZUFoQmRYYmlhTmJ0dS84aW1yK0IK",
+      "endpoints": [
+        "https://github.com/Kievy/fontin/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

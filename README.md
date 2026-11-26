@@ -64,6 +64,27 @@ cargo test              # testes (inclui varredura de /usr/share/fonts)
 cargo test -- --ignored # testes com rede (catálogo e download do Google)
 ```
 
+## Download e atualizações
+
+Instaladores em [Releases](https://github.com/Kievy/fontin/releases/latest):
+
+| SO | Arquivo |
+| --- | --- |
+| Linux | `Fontin_<versão>_amd64.AppImage` — `chmod +x` e execute |
+| Windows | `Fontin_<versão>_x64-setup.exe` |
+| macOS (Intel e Apple Silicon) | `Fontin_<versão>_universal.dmg` |
+
+O Fontin verifica novas versões ao abrir (e a cada 6 h) e se atualiza com um clique. As atualizações são assinadas; a chave pública está em `src-tauri/tauri.conf.json`.
+
+> Os instaladores ainda não têm assinatura de código da Microsoft/Apple. No Windows, o SmartScreen pede "Mais informações → Executar assim mesmo". No macOS, se aparecer "o app está danificado", rode `xattr -cr /Applications/Fontin.app`.
+
+### Publicar uma versão
+
+1. Atualize `version` em `package.json`, `src-tauri/tauri.conf.json` e `src-tauri/Cargo.toml`.
+2. `git commit -am "Release v0.2.0" && git tag v0.2.0 && git push --follow-tags`
+
+O workflow [`release.yml`](.github/workflows/release.yml) compila as três plataformas e publica a Release com o `latest.json` do atualizador. Requer o segredo `TAURI_SIGNING_PRIVATE_KEY` no repositório.
+
 ## Licença
 
 MIT
