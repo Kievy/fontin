@@ -7,6 +7,7 @@
   import Type from "@lucide/svelte/icons/type";
   import { data, ui, prefs, savePrefs, refreshRows } from "$lib/store.svelte";
   import type { Sort } from "$lib/api";
+  import { t, tn } from "$lib/i18n.svelte";
 
   let { searchEl = $bindable() }: { searchEl?: HTMLInputElement } = $props();
 
@@ -15,37 +16,41 @@
     const o = data.overview;
     switch (s.kind) {
       case "all":
-        return "Todas as fontes";
+        return t("title.all");
       case "recent":
-        return "Recentes";
+        return t("scope.recent");
       case "favorites":
-        return "Favoritas";
+        return t("scope.favorites");
       case "active":
-        return "Ativas";
+        return t("scope.active");
       case "inactive":
-        return "Inativas";
+        return t("scope.inactive");
       case "google":
-        return "Google Fonts";
+        return t("nav.google");
       case "collection":
-        return o?.collections.find((c) => c.id === s.value)?.name ?? "Coleção";
-      case "source":
-        return s.value === 1 ? "Google Fonts em cache" : (o?.sources.find((x) => x.id === s.value)?.name ?? "Pasta");
+        return o?.collections.find((c) => c.id === s.value)?.name ?? t("title.collection");
+      case "source": {
+        if (s.value === 1) return t("title.googleCache");
+        const src = o?.sources.find((x) => x.id === s.value);
+        if (src?.kind === "files") return t("side.looseFiles");
+        return src?.name ?? t("title.folder");
+      }
       case "folder":
-        return s.value.split(/[\\/]/).pop() ?? "Pasta";
+        return s.value.split(/[\\/]/).pop() ?? t("title.folder");
     }
   });
 
   const sorts = $derived<{ id: Sort; label: string }[]>(
     ui.section === "google"
       ? [
-          { id: "popular", label: "Populares" },
-          { id: "name", label: "Nome" },
-          { id: "styles", label: "Estilos" },
+          { id: "popular", label: t("sort.popular") },
+          { id: "name", label: t("sort.name") },
+          { id: "styles", label: t("sort.styles") },
         ]
       : [
-          { id: "name", label: "Nome" },
-          { id: "recent", label: "Recentes" },
-          { id: "styles", label: "Estilos" },
+          { id: "name", label: t("sort.name") },
+          { id: "recent", label: t("sort.recent") },
+          { id: "styles", label: t("sort.styles") },
         ],
   );
 
@@ -61,8 +66,7 @@
     <div class="title">
       <h1>{title}</h1>
       <span class="sub tabular">
-        {data.rows.length.toLocaleString("pt-BR")}
-        {data.rows.length === 1 ? "família" : "famílias"}
+        {tn("families", data.rows.length)}
       </span>
     </div>
     <label class="search">
@@ -71,7 +75,7 @@
         bind:this={searchEl}
         bind:value={ui.search}
         oninput={onSearch}
-        placeholder="Buscar fontes…"
+        placeholder={t("search.placeholder")}
         spellcheck="false"
         onkeydown={(e) => {
           if (e.key === "Escape") {
@@ -84,7 +88,7 @@
       {#if ui.search}
         <button
           class="clear"
-          aria-label="Limpar busca"
+          aria-label={t("search.clear")}
           onclick={() => {
             ui.search = "";
             refreshRows();
@@ -97,18 +101,27 @@
   </div>
 
   <div class="tools">
-    <div class="segmented" role="group" aria-label="Visualização">
-      <button class:on={prefs.view === "list"} aria-label="Lista" onclick={() => ((prefs.view = "list"), savePrefs())}>
+    <div class="segmented" role="group" aria-label={t("view.label")}>
+      <button class:on={prefs.view === "list"} aria-label={t("view.list")} onclick={() => ((prefs.view = "list"), savePrefs())}>
         <List size={16} strokeWidth={1.75} />
       </button>
-      <button class:on={prefs.view === "grid"} aria-label="Grade" onclick={() => ((prefs.view = "grid"), savePrefs())}>
+      <button class:on={prefs.view === "grid"} aria-label={t("view.grid")} onclick={() => ((prefs.view = "grid"), savePrefs())}>
         <Grid size={16} strokeWidth={1.75} />
       </button>
     </div>
 
     <label class="sample">
       <Type size={16} strokeWidth={1.75} />
-      <input bind:value={prefs.previewText} oninput={savePrefs} placeholder="Digite um texto de pré-visualização" />
+      <input
+        value={prefs.previewText || t("preview.default")}
+        oninput={(e) => {
+          const v = (e.target as HTMLInputElement).value;
+          // Typing the language default back counts as "not customized".
+          prefs.previewText = v === t("preview.default") ? "" : v;
+          savePrefs();
+        }}
+        placeholder={t("sample.placeholder")}
+      />
     </label>
 
     <div class="size">
@@ -120,21 +133,21 @@
         bind:value={prefs.size}
         onchange={savePrefs}
         style="--p: {((prefs.size - 12) / 148) * 100}%"
-        aria-label="Tamanho"
+        aria-label={t("size.label")}
       />
       <span class="tabular">{prefs.size}px</span>
       <button
         class="icon"
-        aria-label="Restaurar"
+        aria-label={t("size.reset")}
         onclick={() => {
           prefs.size = 40;
-          prefs.previewText = "Um pequeno jabuti xereta viu dez cegonhas felizes.";
+          prefs.previewText = "";
           savePrefs();
         }}><Reset size={14} /></button
       >
     </div>
 
-    <div class="segmented sort" role="group" aria-label="Ordenar">
+    <div class="segmented sort" role="group" aria-label={t("sort.label")}>
       {#each sorts as s (s.id)}
         <button
           class:on={ui.sort === s.id}

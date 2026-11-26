@@ -49,6 +49,7 @@ export interface FolderNode {
 
 export interface SourceInfo {
   id: number;
+  kind: "folder" | "files" | "google";
   name: string;
   path: string;
   count: number;
@@ -106,11 +107,27 @@ export interface AppSettings {
   autostart: boolean;
   startHidden: boolean;
   deactivateOnExit: boolean;
+  language: string;
+}
+
+/** `duplicates`: files skipped because an identical copy is already indexed. */
+export interface DuplicateFile {
+  path: string;
+  /** Family and path of the copy already in the library. */
+  family: string;
+  existing: string;
+}
+
+export interface AddResult {
+  sourceId: number;
+  duplicates: DuplicateFile[];
 }
 
 export const api = {
   getSettings: () => invoke<AppSettings>("get_settings"),
   setSettings: (settings: AppSettings) => invoke<void>("set_settings", { settings }),
+  setLanguage: (language: string) => invoke<void>("set_language", { language }),
+  addFiles: (paths: string[]) => invoke<AddResult>("add_files", { paths }),
   overview: () => invoke<Overview>("overview"),
   query: (query: Query) => invoke<FamilyRow[]>("query_families", { query }),
   detail: (id: string) => invoke<FamilyDetail | null>("family_detail", { id }),
@@ -118,8 +135,9 @@ export const api = {
   setFamiliesActive: (ids: string[], active: boolean) => invoke<void>("set_families_active", { ids, active }),
   setFaceActive: (id: string, active: boolean) => invoke<void>("set_face_active", { id, active }),
   toggleFavorite: (id: string) => invoke<boolean>("toggle_favorite", { id }),
-  addFolder: (path: string) => invoke<number>("add_folder", { path }),
-  rescanSource: (id: number) => invoke<void>("rescan_source", { id }),
+  addFolder: (path: string) => invoke<AddResult>("add_folder", { path }),
+  rescanSource: (id: number) => invoke<DuplicateFile[]>("rescan_source", { id }),
+  allowDuplicates: (paths: string[]) => invoke<void>("allow_duplicates", { paths }),
   removeSource: (id: number) => invoke<void>("remove_source", { id }),
   createCollection: (name: string, color: string) => invoke<number>("create_collection", { name, color }),
   updateCollection: (id: number, name: string, color: string) =>

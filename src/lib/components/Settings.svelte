@@ -5,20 +5,25 @@
   import { getVersion } from "@tauri-apps/api/app";
   import { updater, checkForUpdates, installUpdate } from "$lib/updater.svelte";
   import { api, type AppSettings } from "$lib/api";
-  import { data, toast, prefs, setTheme } from "$lib/store.svelte";
+  import { data, toast, prefs, setTheme, setLanguage } from "$lib/store.svelte";
+  import { t, i18n, LOCALES, type LangPref } from "$lib/i18n.svelte";
   import type { ThemePref } from "$lib/theme";
   import Monitor from "@lucide/svelte/icons/monitor";
   import Sun from "@lucide/svelte/icons/sun";
   import Moon from "@lucide/svelte/icons/moon";
 
-  const themes: { id: ThemePref; label: string; icon: typeof Sun }[] = [
-    { id: "system", label: "Sistema", icon: Monitor },
-    { id: "light", label: "Claro", icon: Sun },
-    { id: "dark", label: "Escuro", icon: Moon },
-  ];
+  const themes = $derived<{ id: ThemePref; label: string; icon: typeof Sun }[]>([
+    { id: "system", label: t("theme.system"), icon: Monitor },
+    { id: "light", label: t("theme.light"), icon: Sun },
+    { id: "dark", label: t("theme.dark"), icon: Moon },
+  ]);
+  const languages = $derived<{ id: LangPref; label: string }[]>([
+    { id: "system", label: t("lang.system") },
+    ...LOCALES,
+  ]);
 
   let settings = $state<AppSettings | null>(null);
-  let saving = $state<keyof AppSettings | null>(null);
+  let saving = $state<BoolKey | null>(null);
 
   let version = $state("");
   onMount(async () => {
@@ -30,30 +35,13 @@
     }
   });
 
-  const options: { key: keyof AppSettings; title: string; desc: string }[] = [
-    {
-      key: "hideOnClose",
-      title: "Ocultar ao fechar",
-      desc: "Fechar a janela mantém o Fontin na bandeja do sistema, com as fontes ativas.",
-    },
-    {
-      key: "autostart",
-      title: "Iniciar ao ligar o sistema",
-      desc: "Abre o Fontin quando você entra na sua sessão, reativando suas fontes.",
-    },
-    {
-      key: "startHidden",
-      title: "Iniciar oculto",
-      desc: "Abre direto na bandeja, sem mostrar a janela. Clique no ícone para abrir.",
-    },
-    {
-      key: "deactivateOnExit",
-      title: "Desativar todas as fontes ao encerrar",
-      desc: "Ao sair, remove as fontes do sistema. Elas voltam a ser ativadas na próxima abertura.",
-    },
-  ];
+  type BoolKey = "hideOnClose" | "autostart" | "startHidden" | "deactivateOnExit";
+  const optionKeys: BoolKey[] = ["hideOnClose", "autostart", "startHidden", "deactivateOnExit"];
+  const options = $derived(
+    optionKeys.map((key) => ({ key, title: t(`opt.${key}.t`), desc: t(`opt.${key}.d`) })),
+  );
 
-  async function flip(key: keyof AppSettings) {
+  async function flip(key: BoolKey) {
     if (!settings || saving) return;
     const next = { ...settings, [key]: !settings[key] };
     saving = key;
@@ -73,24 +61,40 @@
     <Logo size={64} />
     <div>
       <h1>fontin</h1>
-      <p>Gerenciador de fontes open source. A fonte entra no sistema sem ser instalada: liga e desliga.</p>
+      <p>{t("set.tagline")}</p>
     </div>
   </div>
 
   <section>
-    <span class="eyebrow">Aparência</span>
+    <span class="eyebrow">{t("set.appearance")}</span>
     <div class="group">
       <div class="option">
         <div class="text">
-          <span class="title">Tema</span>
-          <span class="desc">“Sistema” acompanha o modo claro/escuro do seu sistema operacional.</span>
+          <span class="title">{t("set.theme")}</span>
+          <span class="desc">{t("set.themeDesc")}</span>
         </div>
-        <div class="segmented" role="radiogroup" aria-label="Tema">
-          {#each themes as t (t.id)}
-            <button role="radio" aria-checked={prefs.theme === t.id} class:on={prefs.theme === t.id} onclick={() => setTheme(t.id)}>
-              <t.icon size={16} strokeWidth={1.75} />
-              {t.label}
+        <div class="segmented" role="radiogroup" aria-label={t("set.theme")}>
+          {#each themes as th (th.id)}
+            <button role="radio" aria-checked={prefs.theme === th.id} class:on={prefs.theme === th.id} onclick={() => setTheme(th.id)}>
+              <th.icon size={16} strokeWidth={1.75} />
+              {th.label}
             </button>
+          {/each}
+        </div>
+      </div>
+      <div class="option">
+        <div class="text">
+          <span class="title">{t("set.language")}</span>
+          <span class="desc">{t("set.languageDesc")}</span>
+        </div>
+        <div class="segmented" role="radiogroup" aria-label={t("set.language")}>
+          {#each languages as lang (lang.id)}
+            <button
+              role="radio"
+              aria-checked={i18n.pref === lang.id}
+              class:on={i18n.pref === lang.id}
+              onclick={() => setLanguage(lang.id)}>{lang.label}</button
+            >
           {/each}
         </div>
       </div>
@@ -98,7 +102,7 @@
   </section>
 
   <section>
-    <span class="eyebrow">Geral</span>
+    <span class="eyebrow">{t("set.general")}</span>
     <div class="group">
       {#each options as opt (opt.key)}
         <div class="option">
@@ -118,26 +122,26 @@
   </section>
 
   <section>
-    <span class="eyebrow">Atualizações</span>
+    <span class="eyebrow">{t("set.updates")}</span>
     <div class="group">
       <div class="option">
         <div class="text">
-          <span class="title">Versão {version}</span>
+          <span class="title">{t("set.version", { v: version })}</span>
           <span class="desc">
             {#if updater.available}
-              Fontin {updater.available.version} está disponível.
+              {t("upd.available", { v: updater.available.version })}
             {:else}
-              O Fontin verifica novas versões no GitHub automaticamente.
+              {t("upd.auto")}
             {/if}
           </span>
         </div>
         {#if updater.available}
           <button class="btn primary" disabled={updater.progress !== null} onclick={installUpdate}>
-            {updater.progress === null ? "Atualizar e reiniciar" : `Baixando ${Math.round(updater.progress * 100)}%`}
+            {updater.progress === null ? t("upd.install") : t("upd.downloadingPct", { p: Math.round(updater.progress * 100) })}
           </button>
         {:else}
           <button class="btn" disabled={updater.checking} onclick={() => checkForUpdates(true)}>
-            {updater.checking ? "Verificando…" : "Verificar agora"}
+            {updater.checking ? t("upd.checking") : t("upd.check")}
           </button>
         {/if}
       </div>
@@ -146,19 +150,17 @@
 
   <div class="cards">
     <div class="card">
-      <span class="eyebrow">Como funciona</span>
-      <p>
-        Ativar cria apenas uma referência temporária para o arquivo original — no Linux via fontconfig, no Windows por
-        sessão (GDI) e no macOS pelo CoreText. Desativar remove a referência; seus arquivos nunca são movidos ou
-        copiados.
-      </p>
+      <span class="eyebrow">{t("set.how")}</span>
+      <p>{t("set.howBody")}</p>
     </div>
     <div class="card">
-      <span class="eyebrow">Biblioteca</span>
+      <span class="eyebrow">{t("set.library")}</span>
       <p class="tabular">
-        {data.overview?.counts.all.toLocaleString("pt-BR") ?? 0} famílias ·
-        {data.overview?.counts.active.toLocaleString("pt-BR") ?? 0} ativas ·
-        {data.overview?.sources.length ?? 0} pastas
+        {t("set.libraryStats", {
+          f: data.overview?.counts.all ?? 0,
+          a: data.overview?.counts.active ?? 0,
+          s: data.overview?.sources.length ?? 0,
+        })}
       </p>
     </div>
   </div>

@@ -17,8 +17,11 @@ pub struct ScanResult {
 /// Snapshot of what is already indexed for a source: path -> (size, mtime, face ids).
 pub type Known = HashMap<PathBuf, (u64, i64, Vec<FaceId>)>;
 
+type Candidate = (PathBuf, u64, i64, FontFormat);
+
+/// Scan a folder recursively.
 pub fn scan_source(source_id: SourceId, root: &Path, known: &Known) -> ScanResult {
-    let files: Vec<(PathBuf, u64, i64, FontFormat)> = walkdir::WalkDir::new(root)
+    let files: Vec<Candidate> = walkdir::WalkDir::new(root)
         .follow_links(true)
         .into_iter()
         .filter_map(|e| e.ok())
@@ -33,7 +36,23 @@ pub fn scan_source(source_id: SourceId, root: &Path, known: &Known) -> ScanResul
             Some((e.into_path(), md.len(), mtime_of(&md), fmt))
         })
         .collect();
+    diff_and_parse(source_id, files, known)
+}
 
+/// Scan an explicit list of font files (the "loose files" source).
+pub fn scan_files(source_id: SourceId, paths: &[PathBuf], known: &Known) -> ScanResult {
+    let files: Vec<Candidate> = paths
+        .iter()
+        .filter_map(|p| {
+            let fmt = FontFormat::from_ext(p.extension()?.to_str()?)?;
+            let md = std::fs::metadata(p).ok()?;
+            Some((p.clone(), md.len(), mtime_of(&md), fmt))
+        })
+        .collect();
+    diff_and_parse(source_id, files, known)
+}
+
+fn diff_and_parse(source_id: SourceId, files: Vec<Candidate>, known: &Known) -> ScanResult {
     let mut seen: HashMap<&Path, ()> = HashMap::with_capacity(files.len());
     let mut to_parse = Vec::new();
     let mut removed = Vec::new();
@@ -96,6 +115,7 @@ pub fn parse_file(
     let map = unsafe { memmap2::Mmap::map(&file) }.ok()?;
     let data: &[u8] = &map;
     let count = ttf_parser::fonts_in_collection(data).unwrap_or(1);
+    let hash = content_hash(data);
 
     let mut out = Vec::with_capacity(count as usize);
     for index in 0..count {
@@ -136,6 +156,7 @@ pub fn parse_file(
             size,
             mtime,
             added_at,
+            hash,
         });
     }
     Some(out)

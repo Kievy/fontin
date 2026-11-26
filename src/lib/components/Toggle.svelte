@@ -5,7 +5,7 @@
     busy = false,
     progress = null,
     size = "md",
-    label = "Ativar",
+    label = "",
     onchange,
   }: {
     state?: 0 | 1 | 2 | boolean;

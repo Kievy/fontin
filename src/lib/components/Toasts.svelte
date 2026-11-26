@@ -1,12 +1,24 @@
 <script lang="ts">
-  import { toasts } from "$lib/store.svelte";
+  import { toasts, dismissToast } from "$lib/store.svelte";
 </script>
 
 <div class="toasts" aria-live="polite">
   {#each toasts as t (t.id)}
-    <div class="toast {t.kind}">
+    <div class="toast {t.kind}" class:has-action={!!t.action}>
       <span class="dot"></span>
-      {t.text}
+      <span class="body">
+        <span>{t.text}</span>
+        {#if t.detail}<span class="detail">{t.detail}</span>{/if}
+      </span>
+      {#if t.action}
+        <button
+          class="action"
+          onclick={() => {
+            dismissToast(t.id);
+            t.action?.run();
+          }}>{t.action.label}</button
+        >
+      {/if}
     </div>
   {/each}
 </div>
@@ -56,5 +68,36 @@
       opacity: 0;
       transform: translateY(8px);
     }
+  }
+  .body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .detail {
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--text-3);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 360px;
+  }
+  .has-action {
+    pointer-events: auto;
+    padding-right: var(--sp-8);
+  }
+  .action {
+    flex: none;
+    height: 32px;
+    padding: 0 var(--sp-12);
+    border-radius: var(--r-8);
+    background: var(--mint);
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .action:hover {
+    filter: brightness(1.05);
   }
 </style>

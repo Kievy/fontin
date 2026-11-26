@@ -7,7 +7,8 @@
   import { revealItemInDir } from "@tauri-apps/plugin-opener";
   import { api, type FaceInfo } from "$lib/api";
   import { loadLocalFace, localFamily, loadRow, rowFamily } from "$lib/fonts";
-  import { data, prefs, select, toggleFamily, toggleFavorite, toast, refreshDetail } from "$lib/store.svelte";
+  import { data, select, toggleFamily, toggleFavorite, toast, refreshDetail, previewText } from "$lib/store.svelte";
+  import { t } from "$lib/i18n.svelte";
 
   const d = $derived(data.detail);
   const row = $derived(d?.row);
@@ -53,20 +54,20 @@
     <header>
       <div class="actions">
         <span class="eyebrow">{row.provider === "google" ? `Google · ${row.category ?? ""}` : row.format}</span>
-        <button class="icon" aria-label="Fechar" onclick={() => select(null)}><X size={16} /></button>
+        <button class="icon" aria-label={t("detail.close")} onclick={() => select(null)}><X size={16} /></button>
       </div>
       <h2 class:ready style="font-family: {family ? `'${family}', ` : ''}var(--font-display)">{row.name}</h2>
       <div class="controls">
         <Toggle
           state={row.active}
           busy={!!data.pending[row.id] || !!data.downloads[row.id]}
-          label="Ativar família"
+          label={t("detail.activateFamily")}
           onchange={() => toggleFamily(row)}
         />
         <span class="state">
-          {row.active === 2 ? "Ativa no sistema" : row.active === 1 ? "Parcialmente ativa" : "Inativa"}
+          {row.active === 2 ? t("detail.activeSystem") : row.active === 1 ? t("detail.partial") : t("detail.inactive")}
         </span>
-        <button class="icon fav" class:on={row.favorite} aria-label="Favoritar" onclick={() => toggleFavorite(row)}>
+        <button class="icon fav" class:on={row.favorite} aria-label={row.favorite ? t("fav.remove") : t("fav.add")} onclick={() => toggleFavorite(row)}>
           <Heart size={16} fill={row.favorite ? "currentColor" : "none"} />
         </button>
       </div>
@@ -80,20 +81,20 @@
 
       <section>
         <div class="head">
-          <span class="eyebrow">Estilos</span>
+          <span class="eyebrow">{t("detail.styles")}</span>
           <span class="muted tabular">{d.faces.length || row.styles}</span>
         </div>
         {#if d.faces.length}
           <ul class="faces">
             {#each d.faces as f (f.id)}
               <li>
-                <Toggle size="sm" state={f.active} label="Ativar estilo" onchange={() => toggleFace(f)} />
+                <Toggle size="sm" state={f.active} label={t("detail.activateStyle")} onchange={() => toggleFace(f)} />
                 <div class="face">
                   <span class="style">{f.style}<em class="tabular">{f.weight}{f.variable ? " · VF" : ""}</em></span>
                   <span
                     class="sample"
                     class:ready={loadedFaces[f.id]}
-                    style="font-family: '{localFamily(f.id)}', var(--font-ui)">{prefs.previewText || row.name}</span
+                    style="font-family: '{localFamily(f.id)}', var(--font-ui)">{previewText()}</span
                   >
                 </div>
               </li>
@@ -101,15 +102,14 @@
           </ul>
         {:else}
           <p class="note">
-            Ao ativar, o Fontin busca os {row.styles} estilos no Google Fonts e os guarda em cache — sem instalar nada no
-            sistema.
+            {t("detail.googleNote", { n: row.styles })}
           </p>
         {/if}
       </section>
 
       {#if data.overview?.collections.length}
         <section>
-          <div class="head"><span class="eyebrow">Coleções</span></div>
+          <div class="head"><span class="eyebrow">{t("detail.collections")}</span></div>
           <div class="chips">
             {#each data.overview.collections as c (c.id)}
               {@const member = d.collections.includes(c.id)}
@@ -123,16 +123,16 @@
       {/if}
 
       <section>
-        <div class="head"><span class="eyebrow">Detalhes</span></div>
+        <div class="head"><span class="eyebrow">{t("detail.details")}</span></div>
         <dl>
-          {#if d.designers.length}<dt>Design</dt><dd>{d.designers.join(", ")}</dd>{/if}
-          {#if d.faces.length}<dt>Arquivos</dt><dd class="tabular">{d.faces.length} · {fmtSize(totalSize)}</dd>{/if}
+          {#if d.designers.length}<dt>{t("detail.design")}</dt><dd>{d.designers.join(", ")}</dd>{/if}
+          {#if d.faces.length}<dt>{t("detail.files")}</dt><dd class="tabular">{d.faces.length} · {fmtSize(totalSize)}</dd>{/if}
           {#if d.faces[0]?.postscript}<dt>PostScript</dt><dd class="mono">{d.faces[0].postscript}</dd>{/if}
         </dl>
         {#if folder}
           <button class="reveal" onclick={() => revealItemInDir(folder)}>
             <FolderOpen size={16} strokeWidth={1.75} />
-            Mostrar na pasta
+            {t("detail.reveal")}
           </button>
         {/if}
       </section>

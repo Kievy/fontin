@@ -1,9 +1,10 @@
 use crate::error::{Error, Result};
+use crate::i18n::Msg;
 use crate::model::*;
 use crate::state::AppState;
 use crate::{google, scanner};
 use serde::Serialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 
@@ -33,6 +34,17 @@ struct ScanProgress {
     scanning: bool,
     added: usize,
     removed: usize,
+    /// Files skipped because an identical copy is already in the library.
+    duplicates: usize,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddResult {
+    source_id: SourceId,
+    /// Files skipped because the same font file is already in the library;
+    /// the UI offers "add anyway" (`allow_duplicates`).
+    duplicates: Vec<DuplicateFile>,
 }
 
 #[tauri::command]
@@ -57,14 +69,14 @@ pub async fn family_detail(state: St<'_>, id: String) -> Result<Option<FamilyDet
 /// Raw font bytes for previews, sent as a binary IPC payload (ArrayBuffer in JS).
 #[tauri::command]
 pub async fn face_data(state: St<'_>, id: String) -> Result<tauri::ipc::Response> {
-    let fid = parse_id(&id).ok_or_else(|| Error::msg("id inválido"))?;
+    let fid = parse_id(&id).ok_or_else(|| Error::from(Msg::InvalidId))?;
     let path = state
         .lib
         .read()
         .faces
         .get(&fid)
         .map(|f| f.path.clone())
-        .ok_or_else(|| Error::msg("face desconhecida"))?;
+        .ok_or_else(|| Error::from(Msg::UnknownFace))?;
     Ok(tauri::ipc::Response::new(tokio::fs::read(path).await?))
 }
 
@@ -80,13 +92,13 @@ pub async fn set_family_active(
     if active && state.family_face_ids(&id).is_none() {
         let family = id
             .strip_prefix("g:")
-            .ok_or_else(|| Error::msg("família desconhecida"))?
+            .ok_or_else(|| Error::from(Msg::UnknownFamily))?
             .to_owned();
         download_google(&app, &state, &id, &family).await?;
     }
     let ids = state
         .family_face_ids(&id)
-        .ok_or_else(|| Error::msg("família sem arquivos"))?;
+        .ok_or_else(|| Error::from(Msg::FamilyWithoutFiles))?;
     tokio::task::spawn_blocking(move || state.set_faces_active(&ids, active))
         .await
         .map_err(|e| Error::msg(e.to_string()))??;
@@ -101,7 +113,7 @@ pub async fn set_face_active(
     id: String,
     active: bool,
 ) -> Result<()> {
-    let fid = parse_id(&id).ok_or_else(|| Error::msg("id inválido"))?;
+    let fid = parse_id(&id).ok_or_else(|| Error::from(Msg::InvalidId))?;
     let state = state.inner().clone();
     tokio::task::spawn_blocking(move || state.set_faces_active(&[fid], active))
         .await
@@ -140,7 +152,7 @@ async fn download_google(
     family: &str,
 ) -> Result<()> {
     if !state.downloading.lock().insert(id.to_owned()) {
-        return Err(Error::msg("download já em andamento"));
+        return Err(Msg::DownloadInProgress.into());
     }
     let emit = |done, total, finished, error: Option<String>| {
         let _ = app.emit(
@@ -192,10 +204,10 @@ pub async fn toggle_favorite(app: AppHandle, state: St<'_>, id: String) -> Resul
 // ---------- Sources ----------
 
 #[tauri::command]
-pub async fn add_folder(app: AppHandle, state: St<'_>, path: String) -> Result<SourceId> {
+pub async fn add_folder(app: AppHandle, state: St<'_>, path: String) -> Result<AddResult> {
     let path = PathBuf::from(path);
     if !path.is_dir() {
-        return Err(Error::msg("pasta não encontrada"));
+        return Err(Msg::FolderNotFound.into());
     }
     {
         let lib = state.lib.read();
@@ -204,7 +216,7 @@ pub async fn add_folder(app: AppHandle, state: St<'_>, path: String) -> Result<S
             .iter()
             .find(|s| s.kind == SourceKind::Folder && path.starts_with(&s.path))
         {
-            return Err(Error::msg(format!("já incluída em “{}”", s.name)));
+            return Err(Msg::AlreadyIncluded(s.name.clone()).into());
         }
     }
     let name = path
@@ -217,16 +229,161 @@ pub async fn add_folder(app: AppHandle, state: St<'_>, path: String) -> Result<S
         .add_source(SourceKind::Folder, &path, &name)?;
     let id = source.id;
     state.lib.write().sources.push(source);
-    scan(app, state.inner().clone(), id).await?;
+    let duplicates = scan(app, state.inner().clone(), id).await?;
+    Ok(AddResult {
+        source_id: id,
+        duplicates,
+    })
+}
+
+/// The single "loose files" source, created on first use.
+fn files_source(state: &AppState) -> Result<SourceId> {
+    if let Some(id) = state
+        .lib
+        .read()
+        .sources
+        .iter()
+        .find(|s| s.kind == SourceKind::Files)
+        .map(|s| s.id)
+    {
+        return Ok(id);
+    }
+    let source = state
+        .db
+        .lock()
+        .add_source(SourceKind::Files, Path::new(""), "files")?;
+    let id = source.id;
+    state.lib.write().sources.push(source);
     Ok(id)
 }
 
+fn add_to_files_source(state: &AppState, id: SourceId, paths: &[PathBuf]) -> Result<()> {
+    state.db.lock().add_source_files(id, paths)?;
+    if let Some(s) = state.lib.write().sources.iter_mut().find(|s| s.id == id) {
+        for p in paths {
+            if !s.files.contains(p) {
+                s.files.push(p.clone());
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Add individual font files. They are grouped in a single "loose files"
+/// source and referenced in place, like folders. Files whose exact bytes are
+/// already indexed are held back and returned so the user can decide.
 #[tauri::command]
-pub async fn rescan_source(app: AppHandle, state: St<'_>, id: SourceId) -> Result<()> {
+pub async fn add_files(app: AppHandle, state: St<'_>, paths: Vec<String>) -> Result<AddResult> {
+    let paths: Vec<PathBuf> = paths
+        .into_iter()
+        .map(PathBuf::from)
+        .filter(|p| {
+            p.is_file()
+                && p.extension()
+                    .and_then(|e| e.to_str())
+                    .and_then(FontFormat::from_ext)
+                    .is_some()
+        })
+        .collect();
+    if paths.is_empty() {
+        return Err(Msg::NoFontFiles.into());
+    }
+    let mut fresh = Vec::new();
+    let mut duplicates = Vec::new();
+    {
+        let lib = state.lib.read();
+        let mut picked = std::collections::HashSet::new();
+        for p in paths {
+            let Ok(bytes) = std::fs::read(&p) else {
+                continue;
+            };
+            let h = content_hash(&bytes);
+            // Already this exact path, or picked twice in the same dialog: nothing to do.
+            if lib.faces.values().any(|f| f.path == p) || !picked.insert(h) {
+                continue;
+            }
+            match lib.same_content(h, 0) {
+                Some(f) if !lib.allowed_duplicates.contains(&p) => duplicates.push(DuplicateFile {
+                    path: p.to_string_lossy().into_owned(),
+                    family: f.family.clone(),
+                    existing: f.path.to_string_lossy().into_owned(),
+                }),
+                _ => fresh.push(p),
+            }
+        }
+    }
+    let id = files_source(&state)?;
+    if !fresh.is_empty() {
+        add_to_files_source(&state, id, &fresh)?;
+        scan(app, state.inner().clone(), id).await?;
+    }
+    Ok(AddResult {
+        source_id: id,
+        duplicates,
+    })
+}
+
+/// "Add anyway": keep these duplicate files as extra references.
+/// Loose files are added to the files source; files inside a folder source
+/// just stop being skipped on the next scan.
+#[tauri::command]
+pub async fn allow_duplicates(app: AppHandle, state: St<'_>, paths: Vec<String>) -> Result<()> {
+    let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+    state.db.lock().allow_duplicates(&paths)?;
+    state
+        .lib
+        .write()
+        .allowed_duplicates
+        .extend(paths.iter().cloned());
+
+    let folders: Vec<SourceId> = {
+        let lib = state.lib.read();
+        lib.sources
+            .iter()
+            .filter(|s| {
+                s.kind == SourceKind::Folder && paths.iter().any(|p| p.starts_with(&s.path))
+            })
+            .map(|s| s.id)
+            .collect()
+    };
+    let loose: Vec<PathBuf> = {
+        let lib = state.lib.read();
+        paths
+            .iter()
+            .filter(|p| {
+                !lib.sources
+                    .iter()
+                    .any(|s| s.kind == SourceKind::Folder && p.starts_with(&s.path))
+            })
+            .cloned()
+            .collect()
+    };
+    if !loose.is_empty() {
+        let id = files_source(&state)?;
+        add_to_files_source(&state, id, &loose)?;
+        scan(app.clone(), state.inner().clone(), id).await?;
+    }
+    for id in folders {
+        scan(app.clone(), state.inner().clone(), id).await?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn rescan_source(
+    app: AppHandle,
+    state: St<'_>,
+    id: SourceId,
+) -> Result<Vec<DuplicateFile>> {
     scan(app, state.inner().clone(), id).await
 }
 
-pub async fn scan(app: AppHandle, state: Arc<AppState>, id: SourceId) -> Result<()> {
+/// Scan a source; returns the duplicate files that were skipped.
+pub async fn scan(
+    app: AppHandle,
+    state: Arc<AppState>,
+    id: SourceId,
+) -> Result<Vec<DuplicateFile>> {
     let _ = app.emit(
         EV_SCAN,
         ScanProgress {
@@ -234,42 +391,79 @@ pub async fn scan(app: AppHandle, state: Arc<AppState>, id: SourceId) -> Result<
             scanning: true,
             added: 0,
             removed: 0,
+            duplicates: 0,
         },
     );
     let st = state.clone();
-    let (added, removed) = tokio::task::spawn_blocking(move || -> Result<(usize, usize)> {
-        let (root, known) = {
-            let lib = st.lib.read();
-            let src = lib
-                .source(id)
-                .ok_or_else(|| Error::msg("fonte desconhecida"))?;
-            (src.path.clone(), lib.known(id))
-        };
-        let r = scanner::scan_source(id, &root, &known);
-        let counts = (r.added.len(), r.removed.len());
-        log::info!("scan {id}: +{} -{} ={}", counts.0, counts.1, r.unchanged);
-        if counts == (0, 0) {
-            return Ok(counts);
-        }
-        // Deactivate faces that vanished before dropping them from the index.
-        let gone_active: Vec<Face> = {
-            let lib = st.lib.read();
-            r.removed
-                .iter()
-                .filter(|i| lib.active.contains(i))
-                .filter_map(|i| lib.faces.get(i).cloned())
-                .collect()
-        };
-        if !gone_active.is_empty() {
-            let refs: Vec<&Face> = gone_active.iter().collect();
-            let _ = st.activator.deactivate(&refs);
-        }
-        st.db.lock().apply_faces(&r.added, &r.removed)?;
-        st.lib.write().apply_faces(r.added, &r.removed);
-        Ok(counts)
-    })
-    .await
-    .map_err(|e| Error::msg(e.to_string()))??;
+    let (added, removed, dups) =
+        tokio::task::spawn_blocking(move || -> Result<(usize, usize, Vec<DuplicateFile>)> {
+            let (src, known) = {
+                let lib = st.lib.read();
+                let src = lib
+                    .source(id)
+                    .ok_or_else(|| Error::from(Msg::UnknownSource))?
+                    .clone();
+                (src, lib.known(id))
+            };
+            let mut r = match src.kind {
+                SourceKind::Files => scanner::scan_files(id, &src.files, &known),
+                _ => scanner::scan_source(id, &src.path, &known),
+            };
+            // Identical files (same bytes) elsewhere in the library are skipped,
+            // so the same font is never offered twice for activation.
+            let mut dups: Vec<DuplicateFile> = Vec::new();
+            {
+                let lib = st.lib.read();
+                let mut seen = lib.content_keys(&r.removed);
+                r.added.retain(|f| {
+                    let fresh = seen.insert((f.hash, f.index));
+                    if fresh || lib.allowed_duplicates.contains(&f.path) {
+                        return true;
+                    }
+                    let path = f.path.to_string_lossy().into_owned();
+                    if !dups.iter().any(|d| d.path == path) {
+                        let existing = lib.same_content(f.hash, f.index);
+                        dups.push(DuplicateFile {
+                            path,
+                            family: existing.map_or_else(|| f.family.clone(), |e| e.family.clone()),
+                            existing: existing
+                                .map(|e| e.path.to_string_lossy().into_owned())
+                                .unwrap_or_default(),
+                        });
+                    }
+                    false
+                });
+            }
+            let duplicates = dups.len();
+            let counts = (r.added.len(), r.removed.len());
+            log::info!(
+                "scan {id}: +{} -{} ={} dup {duplicates}",
+                counts.0,
+                counts.1,
+                r.unchanged
+            );
+            if counts == (0, 0) {
+                return Ok((0, 0, dups));
+            }
+            // Deactivate faces that vanished before dropping them from the index.
+            let gone_active: Vec<Face> = {
+                let lib = st.lib.read();
+                r.removed
+                    .iter()
+                    .filter(|i| lib.active.contains(i))
+                    .filter_map(|i| lib.faces.get(i).cloned())
+                    .collect()
+            };
+            if !gone_active.is_empty() {
+                let refs: Vec<&Face> = gone_active.iter().collect();
+                let _ = st.activator.deactivate(&refs);
+            }
+            st.db.lock().apply_faces(&r.added, &r.removed)?;
+            st.lib.write().apply_faces(r.added, &r.removed);
+            Ok((counts.0, counts.1, dups))
+        })
+        .await
+        .map_err(|e| Error::msg(e.to_string()))??;
     let _ = app.emit(
         EV_SCAN,
         ScanProgress {
@@ -277,16 +471,17 @@ pub async fn scan(app: AppHandle, state: Arc<AppState>, id: SourceId) -> Result<
             scanning: false,
             added,
             removed,
+            duplicates: dups.len(),
         },
     );
     let _ = app.emit(EV_LIBRARY, ());
-    Ok(())
+    Ok(dups)
 }
 
 #[tauri::command]
 pub async fn remove_source(app: AppHandle, state: St<'_>, id: SourceId) -> Result<()> {
     if id == GOOGLE_SOURCE_ID {
-        return Err(Error::msg("o provedor Google não pode ser removido"));
+        return Err(Msg::GoogleNotRemovable.into());
     }
     let state = state.inner().clone();
     tokio::task::spawn_blocking(move || -> Result<()> {
@@ -329,7 +524,7 @@ pub async fn create_collection(
 ) -> Result<i64> {
     let name = name.trim().to_owned();
     if name.is_empty() {
-        return Err(Error::msg("nome vazio"));
+        return Err(Msg::EmptyName.into());
     }
     let id = state.db.lock().create_collection(&name, &color)?;
     state.lib.write().collections.push(Collection {
@@ -439,7 +634,7 @@ pub async fn set_setting(state: St<'_>, key: String, value: String) -> Result<()
 #[tauri::command]
 pub async fn get_settings(app: AppHandle, state: St<'_>) -> Result<crate::settings::Settings> {
     use tauri_plugin_autostart::ManagerExt;
-    let mut s = *state.settings.read();
+    let mut s = state.settings.read().clone();
     // The OS entry is the source of truth (the user may remove it by hand).
     if let Ok(on) = app.autolaunch().is_enabled() {
         s.autostart = on;
@@ -448,15 +643,46 @@ pub async fn get_settings(app: AppHandle, state: St<'_>) -> Result<crate::settin
 }
 
 #[tauri::command]
-pub async fn set_settings(app: AppHandle, state: St<'_>, settings: crate::settings::Settings) -> Result<()> {
+pub async fn set_settings(
+    app: AppHandle,
+    state: St<'_>,
+    settings: crate::settings::Settings,
+) -> Result<()> {
+    // Language has its own command; never let a stale copy overwrite it.
+    let mut settings = settings;
+    settings.language = state.settings.read().language.clone();
     use tauri_plugin_autostart::ManagerExt;
     let autolaunch = app.autolaunch();
     let enabled = autolaunch.is_enabled().unwrap_or(false);
     if settings.autostart != enabled {
-        let r = if settings.autostart { autolaunch.enable() } else { autolaunch.disable() };
-        r.map_err(|e| Error::msg(format!("não foi possível alterar a inicialização automática: {e}")))?;
+        let r = if settings.autostart {
+            autolaunch.enable()
+        } else {
+            autolaunch.disable()
+        };
+        r.map_err(|e| Error::from(Msg::Autostart(e.to_string())))?;
     }
-    state.db.lock().kv_set(crate::settings::KEY, &serde_json::to_string(&settings)?)?;
+    state
+        .db
+        .lock()
+        .kv_set(crate::settings::KEY, &serde_json::to_string(&settings)?)?;
     *state.settings.write() = settings;
+    Ok(())
+}
+
+/// Change the language of backend strings and the tray menu, and persist it.
+#[tauri::command]
+pub async fn set_language(app: AppHandle, state: St<'_>, language: String) -> Result<()> {
+    let settings = {
+        let mut s = state.settings.write();
+        s.language = language;
+        s.clone()
+    };
+    state
+        .db
+        .lock()
+        .kv_set(crate::settings::KEY, &serde_json::to_string(&settings)?)?;
+    crate::i18n::Lang::resolve(&settings.language).set_current();
+    crate::tray::refresh_tray(&app);
     Ok(())
 }

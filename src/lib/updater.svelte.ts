@@ -2,6 +2,7 @@
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { toast } from "./store.svelte";
+import { t } from "./i18n.svelte";
 
 export const updater = $state({
   available: null as { version: string; notes: string } | null,
@@ -22,11 +23,11 @@ export async function checkForUpdates(manual = false) {
       updater.available = { version: pending.version, notes: pending.body ?? "" };
       updater.dismissed = false;
     } else if (manual) {
-      toast("Você está na versão mais recente", "success");
+      toast(t("upd.latest"), "success");
     }
   } catch (e) {
     // Silent on startup (offline, or no release published yet).
-    if (manual) toast(`Não foi possível verificar atualizações: ${e}`, "error");
+    if (manual) toast(t("upd.checkFail", { e: String(e) }), "error");
   } finally {
     updater.checking = false;
   }
@@ -48,7 +49,7 @@ export async function installUpdate() {
     await relaunch();
   } catch (e) {
     updater.progress = null;
-    toast(`Falha ao atualizar: ${e}`, "error");
+    toast(t("upd.fail", { e: String(e) }), "error");
   }
 }
 

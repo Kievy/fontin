@@ -4,6 +4,8 @@
 
 Gerenciador de fontes open source. A fonte entra no sistema **sem ser instalada**: liga e desliga.
 
+![Fontin — biblioteca de fontes com prévia ao vivo](docs/screenshot.png)
+
 - **Ativação sem instalar** — nada é copiado para pastas do sistema; o Fontin só registra uma referência ao arquivo original.
 - **Google Fonts integrado** — navegue pelo catálogo completo com prévia ao vivo (streaming, sem download); ao ativar, os arquivos vão para o cache do app e ficam disponíveis em qualquer programa.
 - **Rápido** — núcleo em Rust: varredura paralela com `rayon` + `memmap2` + `ttf-parser`, índice em memória e rescans incrementais (só arquivos alterados são relidos).

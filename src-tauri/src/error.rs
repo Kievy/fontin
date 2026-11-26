@@ -12,11 +12,20 @@ pub enum Error {
     Json(#[from] serde_json::Error),
     #[error("{0}")]
     Msg(String),
+    #[error("{}", .0.text())]
+    T(crate::i18n::Msg),
 }
 
 impl Error {
+    /// Internal/unexpected failure, shown verbatim.
     pub fn msg(s: impl Into<String>) -> Self {
         Error::Msg(s.into())
+    }
+}
+
+impl From<crate::i18n::Msg> for Error {
+    fn from(m: crate::i18n::Msg) -> Self {
+        Error::T(m)
     }
 }
 

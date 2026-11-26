@@ -8,7 +8,9 @@
   import PowerOff from "@lucide/svelte/icons/power-off";
   import Plus from "@lucide/svelte/icons/plus";
   import FolderIcon from "@lucide/svelte/icons/folder";
-  import FolderPlus from "@lucide/svelte/icons/folder-plus";
+  import FileType from "@lucide/svelte/icons/file-type";
+  import AddMenu from "./AddMenu.svelte";
+  import { t } from "$lib/i18n.svelte";
   import Refresh from "@lucide/svelte/icons/refresh-cw";
   import Trash from "@lucide/svelte/icons/trash-2";
   import Download from "@lucide/svelte/icons/hard-drive-download";
@@ -16,17 +18,17 @@
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import { SvelteSet } from "svelte/reactivity";
   import { api, type Scope } from "$lib/api";
-  import { data, ui, drag, setScope, isScope, toast, refreshAll, addToCollection, addToFavorites } from "$lib/store.svelte";
+  import { data, ui, drag, setScope, isScope, toast, refreshAll, addToCollection, addToFavorites, offerDuplicates } from "$lib/store.svelte";
 
   const COLORS = ["#7df2a6", "#7cc4ff", "#b99cff", "#ffb86b", "#ff7aa8", "#f4f4f0"];
-  const CATEGORIES = [
-    { id: null, label: "Todas as categorias" },
-    { id: "Sans Serif", label: "Sans-serif" },
-    { id: "Serif", label: "Serif" },
-    { id: "Display", label: "Display" },
-    { id: "Handwriting", label: "Manuscrita" },
-    { id: "Monospace", label: "Monoespaçada" },
-  ];
+  const CATEGORIES = $derived([
+    { id: null, label: t("cat.all") },
+    { id: "Sans Serif", label: t("cat.sans") },
+    { id: "Serif", label: t("cat.serif") },
+    { id: "Display", label: t("cat.display") },
+    { id: "Handwriting", label: t("cat.handwriting") },
+    { id: "Monospace", label: t("cat.mono") },
+  ]);
 
   const counts = $derived(data.overview?.counts);
   const openFolders = new SvelteSet<string>();
@@ -35,23 +37,58 @@
   let newName = $state("");
 
   const libraryNav = $derived([
-    { scope: { kind: "all" } as Scope, label: "Todas", icon: Layers, count: counts?.all },
-    { scope: { kind: "recent" } as Scope, label: "Recentes", icon: Clock, count: counts?.recent },
-    { scope: { kind: "favorites" } as Scope, label: "Favoritas", icon: Heart, count: counts?.favorites },
-    { scope: { kind: "active" } as Scope, label: "Ativas", icon: Power, count: counts?.active },
-    { scope: { kind: "inactive" } as Scope, label: "Inativas", icon: PowerOff, count: counts?.inactive },
+    { scope: { kind: "all" } as Scope, label: t("scope.all"), icon: Layers, count: counts?.all },
+    { scope: { kind: "recent" } as Scope, label: t("scope.recent"), icon: Clock, count: counts?.recent },
+    { scope: { kind: "favorites" } as Scope, label: t("scope.favorites"), icon: Heart, count: counts?.favorites },
+    { scope: { kind: "active" } as Scope, label: t("scope.active"), icon: Power, count: counts?.active },
+    { scope: { kind: "inactive" } as Scope, label: t("scope.inactive"), icon: PowerOff, count: counts?.inactive },
   ]);
 
   async function addFolder() {
-    const path = await openDialog({ directory: true, multiple: false, title: "Adicionar pasta de fontes" });
+    const path = await openDialog({ directory: true, multiple: false, title: t("add.folderDialog") });
     if (typeof path !== "string") return;
     try {
-      const id = await api.addFolder(path);
-      setScope({ kind: "source", value: id });
-      toast("Pasta adicionada", "success");
+      const r = await api.addFolder(path);
+      setScope({ kind: "source", value: r.sourceId });
+      toast(t("toast.folderAdded"), "success");
+      offerDuplicates(r.duplicates);
     } catch (e) {
       toast(String(e), "error");
     }
+  }
+
+  async function addFonts() {
+    const picked = await openDialog({
+      multiple: true,
+      title: t("add.fontDialog"),
+      filters: [{ name: t("add.fontFilter"), extensions: ["ttf", "otf", "ttc", "otc", "TTF", "OTF", "TTC"] }],
+    });
+    const paths = Array.isArray(picked) ? picked : typeof picked === "string" ? [picked] : [];
+    if (!paths.length) return;
+    try {
+      const r = await api.addFiles(paths);
+      // Only jump/announce when something new actually got in.
+      if (r.duplicates.length < paths.length) {
+        setScope({ kind: "source", value: r.sourceId });
+        toast(t("toast.fontsAdded"), "success");
+      }
+      offerDuplicates(r.duplicates);
+    } catch (e) {
+      toast(String(e), "error");
+    }
+  }
+
+  async function rescan(id: number) {
+    try {
+      offerDuplicates(await api.rescanSource(id));
+    } catch (e) {
+      toast(String(e), "error");
+    }
+  }
+
+  function startCollection() {
+    if (ui.section !== "library") setScope({ kind: "all" });
+    creating = true;
   }
 
   async function createCollection() {
@@ -69,7 +106,7 @@
   }
 
   async function removeSource(id: number, name: string) {
-    if (!confirm(`Remover “${name}” da biblioteca? Os arquivos não são apagados.`)) return;
+    if (!confirm(t("side.confirmRemove", { name }))) return;
     try {
       await api.removeSource(id);
       if (isScope(ui.scope, { kind: "source", value: id })) setScope({ kind: "all" });
@@ -81,10 +118,10 @@
   async function refreshGoogle() {
     try {
       const n = await api.refreshGoogle(true);
-      toast(`${n.toLocaleString("pt-BR")} famílias no catálogo`, "success");
+      toast(t("toast.catalogCount", { n }), "success");
       refreshAll();
     } catch (e) {
-      toast(`Catálogo indisponível: ${e}`, "error");
+      toast(t("toast.catalogFail", { e: String(e) }), "error");
     }
   }
 </script>
@@ -92,8 +129,8 @@
 <aside class="sidebar">
   {#if ui.section === "library"}
     <header>
-      <h2>Biblioteca</h2>
-      <p>{(counts?.active ?? 0).toLocaleString("pt-BR")} ativas agora</p>
+      <h2>{t("nav.library")}</h2>
+      <p>{t("lib.activeNow", { n: counts?.active ?? 0 })}</p>
     </header>
 
     <div class="scroll">
@@ -113,8 +150,8 @@
 
       <section>
         <div class="section-head">
-          <span class="eyebrow">Coleções</span>
-          <button class="mini" aria-label="Nova coleção" onclick={() => (creating = true)}><Plus size={14} /></button>
+          <span class="eyebrow">{t("side.collections")}</span>
+          <button class="mini" aria-label={t("side.newCollection")} onclick={() => (creating = true)}><Plus size={14} /></button>
         </div>
         {#each data.overview?.collections ?? [] as c (c.id)}
           <NavItem
@@ -127,9 +164,9 @@
             {#snippet actions()}
               <button
                 class="mini"
-                aria-label="Excluir coleção"
+                aria-label={t("side.deleteCollection")}
                 onclick={async () => {
-                  if (!confirm(`Excluir a coleção “${c.name}”?`)) return;
+                  if (!confirm(t("side.confirmDeleteCollection", { name: c.name }))) return;
                   await api.deleteCollection(c.id);
                   if (isScope(ui.scope, { kind: "collection", value: c.id })) setScope({ kind: "all" });
                 }}><Trash size={14} /></button
@@ -139,13 +176,13 @@
           </NavItem>
         {/each}
         {#if drag.row && data.overview?.collections.length}
-          <p class="hint">Solte em uma coleção</p>
+          <p class="hint">{t("side.dropHint")}</p>
         {/if}
         {#if creating}
           <!-- svelte-ignore a11y_autofocus -->
           <input
             class="new"
-            placeholder="Nome da coleção"
+            placeholder={t("side.collectionName")}
             autofocus
             bind:value={newName}
             onblur={createCollection}
@@ -158,14 +195,14 @@
             }}
           />
         {:else if !data.overview?.collections.length}
-          <button class="ghost" onclick={() => (creating = true)}>Nova coleção</button>
+          <button class="ghost" onclick={() => (creating = true)}>{t("side.newCollection")}</button>
         {/if}
       </section>
 
       <section>
         <div class="section-head">
-          <span class="eyebrow">Pastas</span>
-          <button class="mini" aria-label="Adicionar pasta" onclick={addFolder}><Plus size={14} /></button>
+          <span class="eyebrow">{t("side.folders")}</span>
+          <button class="mini" aria-label={t("add.folder")} onclick={addFolder}><Plus size={14} /></button>
         </div>
         {#each data.overview?.sources ?? [] as s (s.id)}
           <NavItem
@@ -175,14 +212,21 @@
           >
             {#snippet icon()}
               <span class:spin={data.scanning[s.id]}>
-                {#if data.scanning[s.id]}<Refresh size={14} />{:else}<FolderIcon size={16} strokeWidth={1.75} />{/if}
+                {#if data.scanning[s.id]}<Refresh size={14} />{:else if s.kind === "files"}<FileType
+                    size={16}
+                    strokeWidth={1.75}
+                  />{:else}<FolderIcon size={16} strokeWidth={1.75} />{/if}
               </span>
             {/snippet}
             {#snippet actions()}
-              <button class="mini" aria-label="Reescanear" onclick={() => api.rescanSource(s.id)}><Refresh size={14} /></button>
-              <button class="mini" aria-label="Remover pasta" onclick={() => removeSource(s.id, s.name)}><Trash size={14} /></button>
+              <button class="mini" aria-label={t("side.rescan")} onclick={() => rescan(s.id)}><Refresh size={14} /></button>
+              <button
+                class="mini"
+                aria-label={t("side.removeFolder")}
+                onclick={() => removeSource(s.id, s.kind === "files" ? t("side.looseFiles") : s.name)}><Trash size={14} /></button
+              >
             {/snippet}
-            {s.name}
+            {s.kind === "files" ? t("side.looseFiles") : s.name}
           </NavItem>
           <FolderTree nodes={s.tree} open={openFolders} />
         {/each}
@@ -190,19 +234,16 @@
     </div>
 
     <footer>
-      <button class="add" onclick={addFolder}>
-        <FolderPlus size={16} strokeWidth={1.75} />
-        Adicionar pasta
-      </button>
+      <AddMenu onfolder={addFolder} onfont={addFonts} oncollection={startCollection} />
     </footer>
   {:else}
     <header>
-      <h2>Google Fonts</h2>
+      <h2>{t("nav.google")}</h2>
       <p>
         {#if data.overview?.googleReady}
-          {(counts?.google ?? 0).toLocaleString("pt-BR")} famílias · ative sem baixar
+          {t("google.subtitle", { n: counts?.google ?? 0 })}
         {:else}
-          Carregando catálogo…
+          {t("google.loading")}
         {/if}
       </p>
     </header>
@@ -214,7 +255,7 @@
           onclick={() => setScope({ kind: "google" }, "google")}
         >
           {#snippet icon()}<Sparkles size={16} strokeWidth={1.75} />{/snippet}
-          Catálogo
+          {t("google.catalog")}
         </NavItem>
         <NavItem
           active={isScope(ui.scope, { kind: "source", value: 1 })}
@@ -222,12 +263,12 @@
           onclick={() => setScope({ kind: "source", value: 1 }, "google")}
         >
           {#snippet icon()}<Download size={16} strokeWidth={1.75} />{/snippet}
-          Em cache
+          {t("google.cached")}
         </NavItem>
       </section>
       <section>
-        <div class="section-head"><span class="eyebrow">Categorias</span></div>
-        {#each CATEGORIES as cat (cat.label)}
+        <div class="section-head"><span class="eyebrow">{t("google.categories")}</span></div>
+        {#each CATEGORIES as cat (cat.id)}
           <NavItem
             active={ui.category === cat.id}
             onclick={() => {
@@ -244,7 +285,7 @@
     <footer>
       <button class="add" onclick={refreshGoogle}>
         <Refresh size={16} strokeWidth={1.75} />
-        Atualizar catálogo
+        {t("google.refresh")}
       </button>
     </footer>
   {/if}

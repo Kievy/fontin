@@ -14,6 +14,8 @@ pub const GOOGLE_SOURCE_ID: SourceId = 1;
 pub enum SourceKind {
     Folder,
     Google,
+    /// Individual font files added one by one.
+    Files,
 }
 
 impl SourceKind {
@@ -21,13 +23,14 @@ impl SourceKind {
         match self {
             SourceKind::Folder => "folder",
             SourceKind::Google => "google",
+            SourceKind::Files => "files",
         }
     }
     pub fn parse(s: &str) -> Self {
-        if s == "google" {
-            SourceKind::Google
-        } else {
-            SourceKind::Folder
+        match s {
+            "google" => SourceKind::Google,
+            "files" => SourceKind::Files,
+            _ => SourceKind::Folder,
         }
     }
 }
@@ -38,6 +41,8 @@ pub struct Source {
     pub kind: SourceKind,
     pub path: PathBuf,
     pub name: String,
+    /// Only for `SourceKind::Files`.
+    pub files: Vec<PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -93,6 +98,8 @@ pub struct Face {
     pub size: u64,
     pub mtime: i64,
     pub added_at: i64,
+    /// xxh3 of the whole file: identical copies in different places share it.
+    pub hash: u64,
 }
 
 pub fn face_id(path: &std::path::Path, index: u32) -> FaceId {
@@ -108,6 +115,12 @@ pub fn local_family_id(source_id: SourceId, family: &str) -> String {
 
 pub fn google_family_id(family: &str) -> String {
     format!("g:{family}")
+}
+
+/// Fingerprint of a file's bytes, used to detect duplicate copies.
+pub fn content_hash(data: &[u8]) -> u64 {
+    // 0 is reserved for "not computed yet" (rows from older versions).
+    xxhash_rust::xxh3::xxh3_64(data).max(1)
 }
 
 pub fn fmt_id(id: FaceId) -> String {
@@ -190,6 +203,17 @@ pub struct FamilyDetail {
     pub designers: Vec<String>,
 }
 
+/// A file that was not indexed because an identical copy is already there.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateFile {
+    pub path: String,
+    /// Family of the copy already in the library.
+    pub family: String,
+    /// Path of the copy already in the library.
+    pub existing: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FolderNode {
@@ -203,6 +227,7 @@ pub struct FolderNode {
 #[serde(rename_all = "camelCase")]
 pub struct SourceInfo {
     pub id: SourceId,
+    pub kind: SourceKind,
     pub name: String,
     pub path: String,
     pub count: u32,

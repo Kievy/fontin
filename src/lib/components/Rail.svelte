@@ -4,15 +4,16 @@
   import GoogleIcon from "./GoogleIcon.svelte";
   import Settings from "@lucide/svelte/icons/settings-2";
   import { ui, setScope } from "$lib/store.svelte";
+  import { t } from "$lib/i18n.svelte";
 
-  const items = [
-    { id: "library", label: "Biblioteca", go: () => setScope({ kind: "all" }) },
-    { id: "google", label: "Google Fonts", go: () => setScope({ kind: "google" }, "google") },
-  ] as const;
+  const items = $derived([
+    { id: "library", label: t("nav.library"), go: () => setScope({ kind: "all" }) },
+    { id: "google", label: t("nav.google"), go: () => setScope({ kind: "google" }, "google") },
+  ] as const);
 </script>
 
 <nav class="rail">
-  <div class="logo"><Logo size={40} /></div>
+  <div class="logo"><Logo size={40} ring /></div>
   <div class="items">
     {#each items as item (item.id)}
       <button
@@ -37,11 +38,11 @@
     <button
       class="item"
       class:active={ui.settingsOpen}
-      aria-label="Configurações"
+      aria-label={t("nav.settings")}
       onclick={() => (ui.settingsOpen = !ui.settingsOpen)}
     >
       <Settings size={20} strokeWidth={1.75} />
-      <span class="tip">Configurações</span>
+      <span class="tip">{t("nav.settings")}</span>
     </button>
   </div>
 </nav>
@@ -62,8 +63,6 @@
   .logo {
     display: grid;
     place-items: center;
-    border-radius: var(--r-12);
-    box-shadow: 0 0 0 1px var(--line-2);
   }
   .items,
   .bottom {

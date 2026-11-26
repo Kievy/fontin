@@ -2,23 +2,24 @@
   import Download from "@lucide/svelte/icons/download";
   import X from "@lucide/svelte/icons/x";
   import { updater, installUpdate } from "$lib/updater.svelte";
+  import { t } from "$lib/i18n.svelte";
 </script>
 
 {#if updater.available && !updater.dismissed}
   <div class="banner" role="status">
     <div class="icon"><Download size={16} strokeWidth={2} /></div>
     <div class="text">
-      <span class="title">Fontin {updater.available.version} disponível</span>
+      <span class="title">{t("upd.bannerTitle", { v: updater.available.version })}</span>
       <span class="sub">
-        {updater.progress === null ? "Atualize e reinicie em segundos." : `Baixando… ${Math.round(updater.progress * 100)}%`}
+        {updater.progress === null ? t("upd.bannerSub") : t("upd.downloading", { p: Math.round(updater.progress * 100) })}
       </span>
       {#if updater.progress !== null}
         <span class="bar"><span style="width: {updater.progress * 100}%"></span></span>
       {/if}
     </div>
     {#if updater.progress === null}
-      <button class="cta" onclick={installUpdate}>Atualizar</button>
-      <button class="close" aria-label="Agora não" onclick={() => (updater.dismissed = true)}><X size={14} /></button>
+      <button class="cta" onclick={installUpdate}>{t("upd.update")}</button>
+      <button class="close" aria-label={t("upd.later")} onclick={() => (updater.dismissed = true)}><X size={14} /></button>
     {/if}
   </div>
 {/if}

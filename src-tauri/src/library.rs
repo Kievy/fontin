@@ -15,6 +15,8 @@ pub struct Library {
     pub active: HashSet<FaceId>,
     pub favorites: HashSet<String>,
     pub collections: Vec<Collection>,
+    /// Files the user chose to keep even though an identical copy exists.
+    pub allowed_duplicates: HashSet<PathBuf>,
     recent: HashSet<String>,
 }
 
@@ -26,6 +28,7 @@ impl Library {
             active: l.active,
             favorites: l.favorites,
             collections: l.collections,
+            allowed_duplicates: l.allowed_duplicates,
             ..Default::default()
         };
         lib.active.retain(|id| lib.faces.contains_key(id));
@@ -318,16 +321,21 @@ impl Library {
         }
         self.sources
             .iter()
-            .filter(|s| s.kind == SourceKind::Folder)
+            .filter(|s| s.kind != SourceKind::Google)
             .map(|s| {
                 let fams = by_source.get(&s.id).map(Vec::as_slice).unwrap_or(&[]);
                 SourceInfo {
                     id: s.id,
+                    kind: s.kind,
                     name: s.name.clone(),
                     path: s.path.to_string_lossy().into_owned(),
                     count: fams.len() as u32,
                     active: fams.iter().filter(|f| self.active_state(f) > 0).count() as u32,
-                    tree: self.folder_tree(&s.path, fams),
+                    tree: if s.kind == SourceKind::Folder {
+                        self.folder_tree(&s.path, fams)
+                    } else {
+                        vec![]
+                    },
                 }
             })
             .collect()
@@ -387,6 +395,23 @@ impl Library {
                 .push(f.id);
         }
         k
+    }
+
+    /// An indexed face with the same bytes as (`hash`, `index`), if any.
+    pub fn same_content(&self, hash: u64, index: u32) -> Option<&Face> {
+        self.faces
+            .values()
+            .find(|f| f.hash == hash && f.index == index)
+    }
+
+    /// Content fingerprints already in the library, excluding `ignore` faces.
+    pub fn content_keys(&self, ignore: &[FaceId]) -> HashSet<(u64, u32)> {
+        let ignore: HashSet<&FaceId> = ignore.iter().collect();
+        self.faces
+            .values()
+            .filter(|f| f.hash != 0 && !ignore.contains(&f.id))
+            .map(|f| (f.hash, f.index))
+            .collect()
     }
 
     pub fn apply_faces(&mut self, added: Vec<Face>, removed: &[FaceId]) {

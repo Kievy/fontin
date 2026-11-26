@@ -39,7 +39,7 @@ pub fn platform(data_dir: &std::path::Path) -> Result<Box<dyn Activator>> {
         return Ok(Box::new(windows::Gdi::default()));
     }
     #[allow(unreachable_code)]
-    Err(crate::error::Error::msg("plataforma não suportada"))
+    Err(crate::i18n::Msg::UnsupportedPlatform.into())
 }
 
 /// Collections (.ttc) contain several faces in one file: activate files once.

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Fontin",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identifier": "app.fontin.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -43,7 +43,18 @@
     "createUpdaterArtifacts": true,
     "publisher": "Kievy",
     "homepage": "https://github.com/Kievy/fontin",
-    "copyright": "MIT"
+    "copyright": "MIT",
+    "windows": {
+      "nsis": {
+        "installMode": "perMachine",
+        "languages": [
+          "PortugueseBR",
+          "English"
+        ],
+        "displayLanguageSelector": false,
+        "installerIcon": "icons/icon.ico"
+      }
+    }
   },
   "plugins": {
     "updater": {

@@ -3,7 +3,8 @@
   import Toggle from "./Toggle.svelte";
   import type { FamilyRow } from "$lib/api";
   import { loadRow, rowFamily } from "$lib/fonts";
-  import { data, prefs, ui, drag, select, toggleFamily, toggleFavorite } from "$lib/store.svelte";
+  import { data, prefs, ui, drag, select, toggleFamily, toggleFavorite, previewText } from "$lib/store.svelte";
+  import { t, tn } from "$lib/i18n.svelte";
 
   let { row, mode, height }: { row: FamilyRow; mode: "list" | "grid"; height: number } = $props();
 
@@ -37,9 +38,15 @@
   const size = $derived(mode === "grid" ? Math.min(prefs.size, 56) : prefs.size);
   const category = $derived(
     row.category &&
-      ({ "Sans Serif": "Sans", Serif: "Serif", Display: "Display", Handwriting: "Manuscrita", Monospace: "Mono" }[
-        row.category
-      ] ??
+      ((
+        {
+          "Sans Serif": t("catShort.sans"),
+          Serif: t("cat.serif"),
+          Display: t("cat.display"),
+          Handwriting: t("catShort.handwriting"),
+          Monospace: t("catShort.mono"),
+        } as Record<string, string>
+      )[row.category] ??
         row.category),
   );
 </script>
@@ -63,23 +70,23 @@
       state={row.active}
       busy={!!data.pending[row.id]}
       progress={dl ? (dl.total ? dl.done / dl.total : 0) : null}
-      label={row.active === 2 ? `Desativar ${row.name}` : `Ativar ${row.name}`}
+      label={row.active === 2 ? t("row.deactivate", { name: row.name }) : t("row.activate", { name: row.name })}
       onchange={() => toggleFamily(row)}
     />
     <span class="name">{row.name}</span>
-    <span class="chip tabular">{row.styles} {row.styles === 1 ? "estilo" : "estilos"}</span>
+    <span class="chip tabular">{tn("styles", row.styles)}</span>
     {#if row.provider === "google"}
       <span class="chip google">{category ?? "Google"}</span>
     {:else}
       <span class="chip">{row.format}</span>
     {/if}
     {#if dl}
-      <span class="dl tabular">baixando {dl.done}/{dl.total}</span>
+      <span class="dl tabular">{t("row.downloading", { done: dl.done, total: dl.total })}</span>
     {/if}
     <button
       class="fav"
       class:on={row.favorite}
-      aria-label={row.favorite ? "Remover dos favoritos" : "Favoritar"}
+      aria-label={row.favorite ? t("fav.remove") : t("fav.add")}
       onclick={(e) => {
         e.stopPropagation();
         toggleFavorite(row);
@@ -95,7 +102,7 @@
     class:failed={state === "failed"}
     style="font-family: {family ? `'${family}', ` : ''}var(--font-ui); font-size: {size}px;"
   >
-    {state === "failed" ? "Prévia indisponível" : prefs.previewText || row.name}
+    {state === "failed" ? t("preview.unavailable") : previewText()}
   </div>
 </div>
 

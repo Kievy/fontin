@@ -3,73 +3,19 @@ mod commands;
 mod db;
 mod error;
 mod google;
+mod i18n;
 mod library;
 mod model;
 mod scanner;
 mod settings;
 mod state;
+mod tray;
 
 use model::SourceKind;
 use state::AppState;
 use std::sync::Arc;
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
-
-fn show_main(app: &AppHandle) {
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.unminimize();
-        let _ = w.show();
-        let _ = w.set_focus();
-    }
-}
-
-/// Turn every active font off (saved state included) without blocking the tray.
-fn deactivate_all(app: &AppHandle) {
-    let app = app.clone();
-    std::thread::spawn(move || {
-        let Some(state) = app.try_state::<Arc<AppState>>() else { return };
-        let ids: Vec<_> = state.lib.read().active.iter().copied().collect();
-        if ids.is_empty() {
-            return;
-        }
-        match state.set_faces_active(&ids, false) {
-            Ok(()) => {
-                let _ = app.emit(commands::EV_LIBRARY, ());
-                let _ = app.emit(commands::EV_NOTICE, format!("{} estilos desativados", ids.len()));
-            }
-            Err(e) => log::error!("deactivate all failed: {e}"),
-        }
-    });
-}
-
-fn build_tray(app: &AppHandle) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open", "Abrir Fontin", true, None::<&str>)?;
-    let off = MenuItem::with_id(app, "deactivate-all", "Desativar todas as fontes", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Sair", true, None::<&str>)?;
-    let sep = || PredefinedMenuItem::separator(app);
-    let menu = Menu::with_items(app, &[&open, &sep()?, &off, &sep()?, &quit])?;
-    let mut tray = TrayIconBuilder::with_id("main")
-        .tooltip("Fontin")
-        .menu(&menu)
-        .show_menu_on_left_click(false)
-        .on_menu_event(|app, e| match e.id.as_ref() {
-            "open" => show_main(app),
-            "deactivate-all" => deactivate_all(app),
-            "quit" => app.exit(0),
-            _ => {}
-        })
-        .on_tray_icon_event(|tray, e| {
-            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e {
-                show_main(tray.app_handle());
-            }
-        });
-    if let Some(icon) = app.default_window_icon() {
-        tray = tray.icon(icon.clone());
-    }
-    tray.build(app)?;
-    Ok(())
-}
+use tauri::{Emitter, Manager, RunEvent, WindowEvent};
+use tray::{build_tray, show_main};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -77,7 +23,9 @@ pub fn run() {
 
     tauri::Builder::default()
         // A second launch (e.g. from the app menu while hidden) just shows the window.
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| show_main(app)))
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            show_main(app)
+        }))
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
@@ -88,6 +36,7 @@ pub fn run() {
             let state = Arc::new(AppState::init(data_dir)?);
             app.manage(state.clone());
 
+            i18n::Lang::resolve(&state.settings.read().language).set_current();
             if let Err(e) = build_tray(app.handle()) {
                 log::warn!("tray unavailable: {e}");
             }
@@ -102,6 +51,9 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 let st = state.clone();
                 let _ = tokio::task::spawn_blocking(move || {
+                    if let Err(e) = st.backfill_hashes() {
+                        log::error!("hash backfill failed: {e}");
+                    }
                     if let Err(e) = st.sync_activation() {
                         log::error!("activation sync failed: {e}");
                     }
@@ -113,7 +65,7 @@ pub fn run() {
                     .read()
                     .sources
                     .iter()
-                    .filter(|s| s.kind == SourceKind::Folder)
+                    .filter(|s| s.kind != SourceKind::Google)
                     .map(|s| s.id)
                     .collect();
                 for id in folders {
@@ -138,6 +90,9 @@ pub fn run() {
             commands::set_families_active,
             commands::toggle_favorite,
             commands::add_folder,
+            commands::add_files,
+            commands::allow_duplicates,
+            commands::set_language,
             commands::rescan_source,
             commands::remove_source,
             commands::create_collection,

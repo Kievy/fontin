@@ -17,6 +17,7 @@ pub struct Loaded {
     pub active: HashSet<FaceId>,
     pub favorites: HashSet<String>,
     pub collections: Vec<Collection>,
+    pub allowed_duplicates: HashSet<PathBuf>,
 }
 
 impl Db {
@@ -44,8 +45,22 @@ impl Db {
              CREATE TABLE IF NOT EXISTS collection_items (
                 collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
                 family_id TEXT NOT NULL, PRIMARY KEY (collection_id, family_id));
+             CREATE TABLE IF NOT EXISTS source_files (
+                source_id INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+                path TEXT NOT NULL, PRIMARY KEY (source_id, path));
+             CREATE TABLE IF NOT EXISTS allowed_duplicates (path TEXT PRIMARY KEY);
              CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);",
         )?;
+        // Migration: content hash for duplicate detection (0 = not computed yet).
+        let has_hash: bool = conn
+            .prepare("SELECT 1 FROM pragma_table_info('faces') WHERE name = 'hash'")?
+            .exists([])?;
+        if !has_hash {
+            conn.execute(
+                "ALTER TABLE faces ADD COLUMN hash INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
         conn.execute(
             "INSERT OR IGNORE INTO sources (id, kind, path, name, added_at) VALUES (?1, 'google', '', 'Google Fonts', ?2)",
             params![GOOGLE_SOURCE_ID, now()],
@@ -54,7 +69,16 @@ impl Db {
     }
 
     pub fn load(&self) -> Result<Loaded> {
-        let sources = self
+        let mut files: HashMap<SourceId, Vec<PathBuf>> = HashMap::new();
+        for row in self
+            .conn
+            .prepare("SELECT source_id, path FROM source_files")?
+            .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?
+        {
+            let (s, p) = row?;
+            files.entry(s).or_default().push(PathBuf::from(p));
+        }
+        let mut sources = self
             .conn
             .prepare("SELECT id, kind, path, name FROM sources ORDER BY id")?
             .query_map([], |r| {
@@ -63,15 +87,19 @@ impl Db {
                     kind: SourceKind::parse(&r.get::<_, String>(1)?),
                     path: PathBuf::from(r.get::<_, String>(2)?),
                     name: r.get(3)?,
+                    files: Vec::new(),
                 })
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
+        for s in &mut sources {
+            s.files = files.remove(&s.id).unwrap_or_default();
+        }
 
         let faces = self
             .conn
             .prepare(
                 "SELECT id, source_id, family_id, family, style, full_name, postscript, path, idx,
-                        weight, italic, width, format, variable, size, mtime, added_at FROM faces",
+                        weight, italic, width, format, variable, size, mtime, added_at, hash FROM faces",
             )?
             .query_map([], |r| {
                 Ok(Face {
@@ -92,6 +120,7 @@ impl Db {
                     size: r.get::<_, i64>(14)? as u64,
                     mtime: r.get(15)?,
                     added_at: r.get(16)?,
+                    hash: r.get::<_, i64>(17)? as u64,
                 })
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -137,7 +166,14 @@ impl Db {
             })
             .collect::<rusqlite::Result<Vec<_>>>()?;
 
+        let allowed_duplicates = self
+            .conn
+            .prepare("SELECT path FROM allowed_duplicates")?
+            .query_map([], |r| Ok(PathBuf::from(r.get::<_, String>(0)?)))?
+            .collect::<rusqlite::Result<HashSet<_>>>()?;
+
         Ok(Loaded {
+            allowed_duplicates,
             sources,
             faces,
             active,
@@ -156,7 +192,47 @@ impl Db {
             kind,
             path: path.to_path_buf(),
             name: name.to_owned(),
+            files: Vec::new(),
         })
+    }
+
+    pub fn set_hashes(&self, hashes: &[(FaceId, u64)]) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        {
+            let mut st = tx.prepare_cached("UPDATE faces SET hash = ?2 WHERE id = ?1")?;
+            for (id, h) in hashes {
+                st.execute(params![*id as i64, *h as i64])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn allow_duplicates(&self, paths: &[PathBuf]) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        {
+            let mut st =
+                tx.prepare_cached("INSERT OR IGNORE INTO allowed_duplicates (path) VALUES (?1)")?;
+            for p in paths {
+                st.execute([p.to_string_lossy()])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn add_source_files(&self, id: SourceId, paths: &[PathBuf]) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        {
+            let mut st = tx.prepare_cached(
+                "INSERT OR IGNORE INTO source_files (source_id, path) VALUES (?1, ?2)",
+            )?;
+            for p in paths {
+                st.execute(params![id, p.to_string_lossy()])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
     }
 
     pub fn remove_source(&self, id: SourceId) -> Result<()> {
@@ -182,8 +258,8 @@ impl Db {
             }
             let mut ins = tx.prepare_cached(
                 "INSERT OR REPLACE INTO faces (id, source_id, family_id, family, style, full_name, postscript,
-                   path, idx, weight, italic, width, format, variable, size, mtime, added_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+                   path, idx, weight, italic, width, format, variable, size, mtime, added_at, hash)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
             )?;
             for f in added {
                 ins.execute(params![
@@ -203,7 +279,8 @@ impl Db {
                     f.variable,
                     f.size as i64,
                     f.mtime,
-                    f.added_at
+                    f.added_at,
+                    f.hash as i64
                 ])?;
             }
         }

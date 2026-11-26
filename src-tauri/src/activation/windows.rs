@@ -1,5 +1,5 @@
 use super::{Activator, unique_paths};
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::model::Face;
 use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
@@ -27,10 +27,7 @@ impl Activator for Gdi {
     fn activate(&self, faces: &[&Face]) -> Result<()> {
         for p in unique_paths(faces) {
             if unsafe { AddFontResourceW(wide(p).as_ptr()) } == 0 {
-                return Err(Error::msg(format!(
-                    "Windows recusou a fonte {}",
-                    p.display()
-                )));
+                return Err(crate::i18n::Msg::WindowsRejected(p.display().to_string()).into());
             }
         }
         broadcast();

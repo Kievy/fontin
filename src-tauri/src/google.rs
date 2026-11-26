@@ -231,9 +231,7 @@ pub async fn download_family(
     let list: DownloadList = serde_json::from_str(strip_guard(&body))?;
     let files = pick_files(family, list.manifest.file_refs);
     if files.is_empty() {
-        return Err(Error::msg(format!(
-            "Google Fonts não retornou arquivos para {family}"
-        )));
+        return Err(crate::i18n::Msg::GoogleNoFiles(family.to_owned()).into());
     }
 
     let dir = family_dir(root, family);

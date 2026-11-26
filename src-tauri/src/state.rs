@@ -62,10 +62,41 @@ impl AppState {
         self.activator.sync(&faces)
     }
 
+    /// Compute content hashes missing from databases of older versions.
+    pub fn backfill_hashes(&self) -> Result<()> {
+        let missing: Vec<(FaceId, std::path::PathBuf)> = {
+            let lib = self.lib.read();
+            lib.faces
+                .values()
+                .filter(|f| f.hash == 0)
+                .map(|f| (f.id, f.path.clone()))
+                .collect()
+        };
+        if !missing.is_empty() {
+            let hashes: Vec<(FaceId, u64)> = missing
+                .iter()
+                .filter_map(|(id, p)| std::fs::read(p).ok().map(|b| (*id, content_hash(&b))))
+                .collect();
+            self.db.lock().set_hashes(&hashes)?;
+            let mut lib = self.lib.write();
+            for (id, h) in &hashes {
+                if let Some(f) = lib.faces.get_mut(id) {
+                    f.hash = *h;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// Pull every font out of the OS without touching the saved state.
     pub fn release_all(&self) {
         let lib = self.lib.read();
-        let faces: Vec<&Face> = lib.active.iter().filter_map(|id| lib.faces.get(id)).collect();
+        let faces: Vec<&Face> = lib
+            .active
+            .iter()
+            .filter_map(|id| lib.faces.get(id))
+            .collect();
         if let Err(e) = self.activator.deactivate(&faces) {
             log::error!("deactivate on exit failed: {e}");
         }

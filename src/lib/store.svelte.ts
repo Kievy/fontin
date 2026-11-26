@@ -3,6 +3,7 @@ import {
   api,
   EVENTS,
   type DownloadProgress,
+  type DuplicateFile,
   type FamilyDetail,
   type FamilyRow,
   type Overview,
@@ -12,6 +13,7 @@ import {
   type Sort,
 } from "./api";
 import { applyTheme, type ThemePref } from "./theme";
+import { applyLocale, t, DEFAULT_PREVIEWS, type LangPref } from "./i18n.svelte";
 
 export type Section = "library" | "google";
 export type View = "list" | "grid";
@@ -26,7 +28,8 @@ interface Prefs {
 }
 
 const DEFAULT_PREFS: Prefs = {
-  previewText: "Um pequeno jabuti xereta viu dez cegonhas felizes.",
+  // Empty = the current language's default sentence (see previewText()).
+  previewText: "",
   size: 40,
   view: "list",
   theme: "system",
@@ -34,7 +37,10 @@ const DEFAULT_PREFS: Prefs = {
 
 function readPrefs(): Prefs {
   try {
-    return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}") };
+    const saved = { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}") };
+    // Older versions stored the default sentence itself; treat it as "not customized".
+    if (DEFAULT_PREVIEWS.includes(saved.previewText)) saved.previewText = "";
+    return saved;
   } catch {
     return DEFAULT_PREFS;
   }
@@ -46,6 +52,22 @@ export function setTheme(theme: ThemePref) {
   prefs.theme = theme;
   applyTheme(theme);
   savePrefs();
+}
+
+/** Sample text shown in previews: the user's, or the language default. */
+export function previewText(): string {
+  return prefs.previewText || t("preview.default");
+}
+
+export async function setLanguage(pref: LangPref) {
+  applyLocale(pref);
+  try {
+    await api.setLanguage(pref);
+  } catch (e) {
+    toast(String(e), "error");
+  }
+  // Backend-produced labels (e.g. error texts) may now differ.
+  refreshAll();
 }
 
 export function savePrefs() {
@@ -76,20 +98,49 @@ export const data = $state({
   pending: {} as Record<string, boolean>,
 });
 
+export interface ToastAction {
+  label: string;
+  run: () => void | Promise<void>;
+}
 export interface Toast {
   id: number;
   kind: "info" | "error" | "success";
   text: string;
+  detail?: string;
+  action?: ToastAction;
 }
 export const toasts = $state<Toast[]>([]);
 let toastSeq = 0;
-export function toast(text: string, kind: Toast["kind"] = "info") {
+export function dismissToast(id: number) {
+  const i = toasts.findIndex((t) => t.id === id);
+  if (i >= 0) toasts.splice(i, 1);
+}
+export function toast(text: string, kind: Toast["kind"] = "info", opts: { action?: ToastAction; detail?: string } = {}) {
   const id = ++toastSeq;
-  toasts.push({ id, kind, text });
-  setTimeout(() => {
-    const i = toasts.findIndex((t) => t.id === id);
-    if (i >= 0) toasts.splice(i, 1);
-  }, kind === "error" ? 6000 : 3200);
+  toasts.push({ id, kind, text, ...opts });
+  // Toasts that ask for a decision stay longer.
+  setTimeout(() => dismissToast(id), opts.action ? 12000 : kind === "error" ? 6000 : 3200);
+}
+
+/** Identical files were held back: tell the user and let them add them anyway. */
+export function offerDuplicates(dups: DuplicateFile[]) {
+  if (!dups.length) return;
+  const text = dups.length === 1 ? t("dup.one", { family: dups[0].family }) : t("dup.many", { n: dups.length });
+  const detail = dups.length === 1 ? t("dup.where", { path: dups[0].existing }) : undefined;
+  toast(text, "info", {
+    detail,
+    action: {
+      label: t("dup.addAnyway"),
+      run: async () => {
+        try {
+          await api.allowDuplicates(dups.map((d) => d.path));
+          toast(dups.length === 1 ? t("dup.addedOne") : t("dup.addedMany"), "success");
+        } catch (e) {
+          toast(String(e), "error");
+        }
+      },
+    },
+  });
 }
 
 let querySeq = 0;
@@ -168,7 +219,7 @@ export async function addToCollection(collectionId: number, row: FamilyRow) {
   const c = data.overview?.collections.find((x) => x.id === collectionId);
   try {
     await api.setInCollection(collectionId, [row.id], true);
-    toast(`${row.name} adicionada a “${c?.name ?? "coleção"}”`, "success");
+    toast(t("toast.addedToCollection", { name: row.name, c: c?.name ?? t("title.collection") }), "success");
   } catch (e) {
     toast(String(e), "error");
   }
@@ -177,7 +228,7 @@ export async function addToCollection(collectionId: number, row: FamilyRow) {
 export async function addToFavorites(row: FamilyRow) {
   if (row.favorite) return;
   await toggleFavorite(row);
-  toast(`${row.name} adicionada às favoritas`, "success");
+  toast(t("toast.addedToFavorites", { name: row.name }), "success");
 }
 
 export async function toggleFavorite(row: FamilyRow) {
@@ -195,6 +246,13 @@ export function isScope(a: Scope, b: Scope) {
 }
 
 export async function init() {
+  // Language lives in the backend settings (the tray menu uses it too).
+  try {
+    const s = await api.getSettings();
+    applyLocale((s.language || "system") as LangPref);
+  } catch {
+    applyLocale("system");
+  }
   applyTheme(prefs.theme);
   await Promise.all([
     listen(EVENTS.library, refreshAll),
@@ -204,7 +262,7 @@ export async function init() {
       const p = e.payload;
       if (p.finished) {
         delete data.downloads[p.familyId];
-        if (p.error) toast(`Falha ao baixar: ${p.error}`, "error");
+        if (p.error) toast(t("toast.downloadFail", { e: p.error }), "error");
       } else {
         data.downloads[p.familyId] = p;
       }
