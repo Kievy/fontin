@@ -13,6 +13,8 @@ pub const EV_LIBRARY: &str = "library-changed";
 pub const EV_CATALOG: &str = "catalog-changed";
 pub const EV_DOWNLOAD: &str = "download-progress";
 pub const EV_SCAN: &str = "scan-progress";
+/// Short message for a toast, for actions started outside the window (tray).
+pub const EV_NOTICE: &str = "notice";
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -430,4 +432,31 @@ pub async fn get_setting(state: St<'_>, key: String) -> Result<Option<String>> {
 #[tauri::command]
 pub async fn set_setting(state: St<'_>, key: String, value: String) -> Result<()> {
     state.db.lock().kv_set(&key, &value)
+}
+
+// ---------- App preferences ----------
+
+#[tauri::command]
+pub async fn get_settings(app: AppHandle, state: St<'_>) -> Result<crate::settings::Settings> {
+    use tauri_plugin_autostart::ManagerExt;
+    let mut s = *state.settings.read();
+    // The OS entry is the source of truth (the user may remove it by hand).
+    if let Ok(on) = app.autolaunch().is_enabled() {
+        s.autostart = on;
+    }
+    Ok(s)
+}
+
+#[tauri::command]
+pub async fn set_settings(app: AppHandle, state: St<'_>, settings: crate::settings::Settings) -> Result<()> {
+    use tauri_plugin_autostart::ManagerExt;
+    let autolaunch = app.autolaunch();
+    let enabled = autolaunch.is_enabled().unwrap_or(false);
+    if settings.autostart != enabled {
+        let r = if settings.autostart { autolaunch.enable() } else { autolaunch.disable() };
+        r.map_err(|e| Error::msg(format!("não foi possível alterar a inicialização automática: {e}")))?;
+    }
+    state.db.lock().kv_set(crate::settings::KEY, &serde_json::to_string(&settings)?)?;
+    *state.settings.write() = settings;
+    Ok(())
 }

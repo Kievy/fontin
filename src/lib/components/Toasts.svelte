@@ -31,7 +31,7 @@
     max-width: 560px;
     padding: var(--sp-8) var(--sp-16);
     border-radius: var(--r-12);
-    background: rgba(27, 31, 36, 0.9);
+    background: var(--toast-bg);
     backdrop-filter: blur(16px);
     box-shadow: var(--shadow-pop);
     font-size: 13px;

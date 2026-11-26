@@ -3,7 +3,7 @@
   import Toggle from "./Toggle.svelte";
   import type { FamilyRow } from "$lib/api";
   import { loadRow, rowFamily } from "$lib/fonts";
-  import { data, prefs, ui, select, toggleFamily, toggleFavorite } from "$lib/store.svelte";
+  import { data, prefs, ui, drag, select, toggleFamily, toggleFavorite } from "$lib/store.svelte";
 
   let { row, mode, height }: { row: FamilyRow; mode: "list" | "grid"; height: number } = $props();
 
@@ -18,6 +18,21 @@
   });
 
   const family = $derived(rowFamily(row));
+
+  function onDragStart(e: DragEvent) {
+    if (!e.dataTransfer) return;
+    drag.row = row;
+    e.dataTransfer.effectAllowed = "copy";
+    e.dataTransfer.setData("text/plain", row.name);
+    // Compact pill instead of a screenshot of the whole row.
+    const ghost = document.createElement("div");
+    ghost.className = "drag-ghost";
+    ghost.textContent = row.name;
+    if (family) ghost.style.fontFamily = `'${family}', var(--font-ui)`;
+    document.body.appendChild(ghost);
+    e.dataTransfer.setDragImage(ghost, 16, 20);
+    requestAnimationFrame(() => ghost.remove());
+  }
   const dl = $derived(data.downloads[row.id]);
   const size = $derived(mode === "grid" ? Math.min(prefs.size, 56) : prefs.size);
   const category = $derived(
@@ -33,7 +48,11 @@
   class="row {mode}"
   class:selected={ui.selected === row.id}
   class:active={row.active > 0}
+  class:dragging={drag.row?.id === row.id}
   style="height: {height}px"
+  draggable="true"
+  ondragstart={onDragStart}
+  ondragend={() => (drag.row = null)}
   role="button"
   tabindex="-1"
   onclick={() => select(row.id)}
@@ -92,8 +111,11 @@
     transition: background 140ms var(--ease);
     overflow: hidden;
   }
+  .row.dragging {
+    opacity: 0.4;
+  }
   .row:hover {
-    background: rgba(255, 255, 255, 0.025);
+    background: var(--row-hover);
   }
   .row.selected {
     background: var(--raised);
@@ -108,7 +130,7 @@
     box-shadow: inset 0 0 0 1px var(--line-2);
   }
   .row.grid.selected {
-    box-shadow: inset 0 0 0 1px rgba(125, 242, 166, 0.5);
+    box-shadow: inset 0 0 0 1px var(--accent-line);
   }
   .meta {
     display: flex;
@@ -146,12 +168,12 @@
     display: none;
   }
   .chip.google {
-    background: rgba(124, 196, 255, 0.1);
-    color: #9dd2ff;
+    background: var(--info-bg);
+    color: var(--info-text);
   }
   .dl {
     font-size: 12px;
-    color: var(--mint);
+    color: var(--accent-text);
   }
   .fav {
     margin-left: auto;
@@ -193,7 +215,6 @@
       transform 220ms var(--ease);
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 64px), transparent);
     mask-image: linear-gradient(to right, #000 calc(100% - 64px), transparent);
-    user-select: text;
   }
   .grid .preview {
     white-space: normal;

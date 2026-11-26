@@ -193,7 +193,7 @@
     gap: var(--sp-8);
     padding: 0 var(--sp-8) 0 var(--sp-16);
     border-radius: var(--r-12);
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--field);
     box-shadow: inset 0 0 0 1px var(--line-2);
     backdrop-filter: blur(16px);
     color: var(--text-3);
@@ -201,8 +201,8 @@
   }
   .search:focus-within {
     box-shadow:
-      inset 0 0 0 1px rgba(125, 242, 166, 0.5),
-      0 0 0 4px rgba(125, 242, 166, 0.08);
+      inset 0 0 0 1px var(--accent-line),
+      0 0 0 4px var(--accent-ring);
     color: var(--text-2);
   }
   .search input {
@@ -270,7 +270,7 @@
     color: var(--text);
     box-shadow:
       inset 0 0 0 1px var(--line-2),
-      0 2px 8px rgba(0, 0, 0, 0.3);
+      var(--shadow-sm);
   }
   .sample {
     flex: 1;
@@ -339,8 +339,8 @@
     border-radius: 50%;
     background: var(--paper);
     box-shadow:
-      0 0 0 4px rgba(125, 242, 166, 0.16),
-      0 2px 8px rgba(0, 0, 0, 0.5);
+      0 0 0 4px var(--accent-ring),
+      var(--shadow-thumb);
   }
   @media (max-width: 1180px) {
     .sort {

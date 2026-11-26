@@ -11,6 +11,7 @@ import {
   type Scope,
   type Sort,
 } from "./api";
+import { applyTheme, type ThemePref } from "./theme";
 
 export type Section = "library" | "google";
 export type View = "list" | "grid";
@@ -21,12 +22,14 @@ interface Prefs {
   previewText: string;
   size: number;
   view: View;
+  theme: ThemePref;
 }
 
 const DEFAULT_PREFS: Prefs = {
   previewText: "Um pequeno jabuti xereta viu dez cegonhas felizes.",
   size: 40,
   view: "list",
+  theme: "system",
 };
 
 function readPrefs(): Prefs {
@@ -38,6 +41,12 @@ function readPrefs(): Prefs {
 }
 
 export const prefs = $state<Prefs>(readPrefs());
+
+export function setTheme(theme: ThemePref) {
+  prefs.theme = theme;
+  applyTheme(theme);
+  savePrefs();
+}
 
 export function savePrefs() {
   try {
@@ -152,6 +161,25 @@ export async function toggleFamily(row: FamilyRow) {
   }
 }
 
+/** Family being dragged from the list (drives drop-target highlights). */
+export const drag = $state({ row: null as FamilyRow | null });
+
+export async function addToCollection(collectionId: number, row: FamilyRow) {
+  const c = data.overview?.collections.find((x) => x.id === collectionId);
+  try {
+    await api.setInCollection(collectionId, [row.id], true);
+    toast(`${row.name} adicionada a “${c?.name ?? "coleção"}”`, "success");
+  } catch (e) {
+    toast(String(e), "error");
+  }
+}
+
+export async function addToFavorites(row: FamilyRow) {
+  if (row.favorite) return;
+  await toggleFavorite(row);
+  toast(`${row.name} adicionada às favoritas`, "success");
+}
+
 export async function toggleFavorite(row: FamilyRow) {
   row.favorite = !row.favorite;
   try {
@@ -167,9 +195,11 @@ export function isScope(a: Scope, b: Scope) {
 }
 
 export async function init() {
+  applyTheme(prefs.theme);
   await Promise.all([
     listen(EVENTS.library, refreshAll),
     listen(EVENTS.catalog, refreshAll),
+    listen<string>(EVENTS.notice, (e) => toast(e.payload, "success")),
     listen<DownloadProgress>(EVENTS.download, (e) => {
       const p = e.payload;
       if (p.finished) {

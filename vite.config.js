@@ -14,6 +14,10 @@ export default defineConfig(() => ({
   clearScreen: false,
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
+    // The Tauri webview keeps an HTTP cache across launches; cached component
+    // modules then request Svelte's virtual CSS before Vite has compiled them
+    // ("failed to load virtual css module"). Never cache in dev.
+    headers: { "Cache-Control": "no-store" },
     port: 1420,
     strictPort: true,
     host: host || "127.0.0.1",

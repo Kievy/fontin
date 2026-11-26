@@ -51,7 +51,7 @@
     gap: var(--sp-8);
     padding: var(--sp-8);
     background:
-      radial-gradient(1200px 600px at 100% -10%, rgba(125, 242, 166, 0.05), transparent 60%),
+      radial-gradient(1200px 600px at 100% -10%, var(--aura-bg), transparent 60%),
       var(--bg);
   }
   main {
@@ -71,8 +71,8 @@
     inset: 0 0 auto 0;
     height: 240px;
     background:
-      radial-gradient(600px 240px at 85% -40%, rgba(125, 242, 166, 0.1), transparent 70%),
-      radial-gradient(400px 200px at 10% -60%, rgba(124, 196, 255, 0.05), transparent 70%);
+      radial-gradient(600px 240px at 85% -40%, var(--aura-1), transparent 70%),
+      radial-gradient(400px 200px at 10% -60%, var(--aura-2), transparent 70%);
     pointer-events: none;
     z-index: -1;
   }

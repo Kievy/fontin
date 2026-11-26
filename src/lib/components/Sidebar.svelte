@@ -16,7 +16,7 @@
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import { SvelteSet } from "svelte/reactivity";
   import { api, type Scope } from "$lib/api";
-  import { data, ui, setScope, isScope, toast, refreshAll } from "$lib/store.svelte";
+  import { data, ui, drag, setScope, isScope, toast, refreshAll, addToCollection, addToFavorites } from "$lib/store.svelte";
 
   const COLORS = ["#7df2a6", "#7cc4ff", "#b99cff", "#ffb86b", "#ff7aa8", "#f4f4f0"];
   const CATEGORIES = [
@@ -103,6 +103,7 @@
             active={isScope(ui.scope, item.scope)}
             count={item.count ?? null}
             onclick={() => setScope(item.scope)}
+            ondropfamily={item.scope.kind === "favorites" ? addToFavorites : undefined}
           >
             {#snippet icon()}<item.icon size={16} strokeWidth={1.75} />{/snippet}
             {item.label}
@@ -120,6 +121,7 @@
             active={isScope(ui.scope, { kind: "collection", value: c.id })}
             count={c.count}
             onclick={() => setScope({ kind: "collection", value: c.id })}
+            ondropfamily={(row) => addToCollection(c.id, row)}
           >
             {#snippet icon()}<span class="swatch" style="--c: {c.color}" class:lit={c.active > 0}></span>{/snippet}
             {#snippet actions()}
@@ -136,6 +138,9 @@
             {c.name}
           </NavItem>
         {/each}
+        {#if drag.row && data.overview?.collections.length}
+          <p class="hint">Solte em uma coleção</p>
+        {/if}
         {#if creating}
           <!-- svelte-ignore a11y_autofocus -->
           <input
@@ -323,16 +328,23 @@
     color: var(--text-3);
   }
   .glyph.on {
-    color: var(--mint);
+    color: var(--accent-text);
   }
   .new {
     height: 32px;
     margin: 0 0 0 var(--sp-4);
     padding: 0 var(--sp-12);
     border-radius: var(--r-8);
-    border: 1px solid var(--mint);
+    border: 1px solid var(--accent-text);
     background: var(--raised);
     outline: none;
+  }
+  .hint {
+    margin: var(--sp-4) 0 0;
+    padding: 0 var(--sp-12);
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--accent-text);
   }
   .ghost {
     height: 32px;
@@ -370,7 +382,7 @@
   .spin {
     display: grid;
     animation: spin 1s linear infinite;
-    color: var(--mint);
+    color: var(--accent-text);
   }
   @keyframes spin {
     to {

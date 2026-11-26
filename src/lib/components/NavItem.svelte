@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import type { FamilyRow } from "$lib/api";
+  import { drag } from "$lib/store.svelte";
   let {
     active = false,
     count = null,
@@ -8,6 +10,7 @@
     actions,
     children,
     onclick,
+    ondropfamily,
   }: {
     active?: boolean;
     count?: number | null;
@@ -16,10 +19,42 @@
     actions?: Snippet;
     children: Snippet;
     onclick?: () => void;
+    /** Makes the item a drop target for families dragged from the list. */
+    ondropfamily?: (row: FamilyRow) => void;
   } = $props();
+
+  // dragenter/leave fire for every child; a counter keeps the highlight stable.
+  let depthIn = $state(0);
+  const accepting = $derived(!!ondropfamily && !!drag.row);
 </script>
 
-<div class="nav" class:active style="--depth: {depth}">
+<div
+  class="nav"
+  class:active
+  class:target={accepting}
+  class:over={accepting && depthIn > 0}
+  style="--depth: {depth}"
+  role="listitem"
+  ondragenter={(e) => {
+    if (!accepting) return;
+    e.preventDefault();
+    depthIn++;
+  }}
+  ondragover={(e) => {
+    if (!accepting) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+  }}
+  ondragleave={() => {
+    if (accepting) depthIn = Math.max(0, depthIn - 1);
+  }}
+  ondrop={(e) => {
+    if (!accepting || !drag.row) return;
+    e.preventDefault();
+    depthIn = 0;
+    ondropfamily?.(drag.row);
+  }}
+>
   <button class="main" {onclick}>
     {#if icon}<span class="icon">{@render icon()}</span>{/if}
     <span class="label">{@render children()}</span>
@@ -37,6 +72,15 @@
     border-radius: var(--r-8);
     color: var(--text-2);
     transition: background 120ms var(--ease);
+  }
+  .nav.target {
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    border-radius: var(--r-8);
+  }
+  .nav.over {
+    background: var(--mint-soft);
+    color: var(--text);
+    box-shadow: inset 0 0 0 1px var(--accent-line);
   }
   .nav:hover {
     background: var(--hover);
@@ -74,7 +118,7 @@
     color: var(--text-3);
   }
   .active .icon {
-    color: var(--mint);
+    color: var(--accent-text);
   }
   .label {
     flex: 1;

@@ -164,7 +164,7 @@
     inset: -120px -80px auto auto;
     width: 320px;
     height: 320px;
-    background: radial-gradient(circle, rgba(125, 242, 166, 0.12), transparent 65%);
+    background: radial-gradient(circle, var(--aura-1), transparent 65%);
     pointer-events: none;
   }
   header {
@@ -237,7 +237,7 @@
   .aa {
     font-size: 96px;
     line-height: 104px;
-    color: var(--paper);
+    color: var(--text);
   }
   .glyphs {
     margin-top: var(--sp-8);

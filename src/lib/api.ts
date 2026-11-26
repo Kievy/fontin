@@ -101,7 +101,16 @@ export interface Query {
   category: string | null;
 }
 
+export interface AppSettings {
+  hideOnClose: boolean;
+  autostart: boolean;
+  startHidden: boolean;
+  deactivateOnExit: boolean;
+}
+
 export const api = {
+  getSettings: () => invoke<AppSettings>("get_settings"),
+  setSettings: (settings: AppSettings) => invoke<void>("set_settings", { settings }),
   overview: () => invoke<Overview>("overview"),
   query: (query: Query) => invoke<FamilyRow[]>("query_families", { query }),
   detail: (id: string) => invoke<FamilyDetail | null>("family_detail", { id }),
@@ -129,6 +138,7 @@ export const EVENTS = {
   catalog: "catalog-changed",
   download: "download-progress",
   scan: "scan-progress",
+  notice: "notice",
 } as const;
 
 export interface DownloadProgress {

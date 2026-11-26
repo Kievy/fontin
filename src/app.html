@@ -5,6 +5,16 @@
     <link rel="icon" href="%sveltekit.assets%/logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Fontin</title>
+    <script>
+      // Apply the saved theme before first paint (mirrors src/lib/theme.ts).
+      try {
+        var t = (JSON.parse(localStorage.getItem("fontin.prefs") || "{}").theme) || "system";
+        if (t === "system") t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.dataset.theme = t;
+      } catch (e) {
+        document.documentElement.dataset.theme = "dark";
+      }
+    </script>
     %sveltekit.head%
   </head>
   <body >

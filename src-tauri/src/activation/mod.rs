@@ -21,6 +21,8 @@ pub trait Activator: Send + Sync {
     fn deactivate(&self, faces: &[&Face]) -> Result<()>;
     /// Make the OS state match exactly `faces` (startup reconciliation).
     fn sync(&self, faces: &[&Face]) -> Result<()>;
+    /// Block until the OS has seen pending changes (used right before exit).
+    fn flush(&self) {}
 }
 
 pub fn platform(data_dir: &std::path::Path) -> Result<Box<dyn Activator>> {

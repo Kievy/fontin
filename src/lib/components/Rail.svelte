@@ -1,13 +1,13 @@
 <script lang="ts">
   import Logo from "./Logo.svelte";
   import LibraryIcon from "@lucide/svelte/icons/library-big";
-  import Globe from "@lucide/svelte/icons/globe";
+  import GoogleIcon from "./GoogleIcon.svelte";
   import Settings from "@lucide/svelte/icons/settings-2";
   import { ui, setScope } from "$lib/store.svelte";
 
   const items = [
-    { id: "library", label: "Biblioteca", icon: LibraryIcon, go: () => setScope({ kind: "all" }) },
-    { id: "google", label: "Google Fonts", icon: Globe, go: () => setScope({ kind: "google" }, "google") },
+    { id: "library", label: "Biblioteca", go: () => setScope({ kind: "all" }) },
+    { id: "google", label: "Google Fonts", go: () => setScope({ kind: "google" }, "google") },
   ] as const;
 </script>
 
@@ -24,7 +24,11 @@
           item.go();
         }}
       >
-        <item.icon size={20} strokeWidth={1.75} />
+        {#if item.id === "google"}
+          <GoogleIcon size={18} mono={ui.section === "google" && !ui.settingsOpen} />
+        {:else}
+          <LibraryIcon size={20} strokeWidth={1.75} />
+        {/if}
         <span class="tip">{item.label}</span>
       </button>
     {/each}

@@ -106,6 +106,11 @@ impl Activator for Fontconfig {
         Ok(())
     }
 
+    fn flush(&self) {
+        // The debounced worker dies with the process, so refresh synchronously.
+        let _ = std::process::Command::new("fc-cache").arg("-f").arg(&self.dir).status();
+    }
+
     fn sync(&self, faces: &[&Face]) -> Result<()> {
         let wanted: HashSet<PathBuf> = unique_paths(faces)
             .into_iter()

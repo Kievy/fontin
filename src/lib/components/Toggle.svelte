@@ -62,7 +62,7 @@
     --k: 6px;
   }
   .toggle:hover {
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+    box-shadow: inset 0 0 0 1px var(--line-strong);
   }
   .knob {
     position: absolute;
@@ -81,7 +81,7 @@
   .toggle.on {
     background: var(--mint);
     box-shadow:
-      inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+      inset 0 0 0 1px rgba(18, 20, 24, 0.08),
       0 0 16px -4px var(--mint-glow);
   }
   .toggle.on .knob {
@@ -91,11 +91,11 @@
   }
   .toggle.partial {
     background: var(--mint-soft);
-    box-shadow: inset 0 0 0 1px rgba(125, 242, 166, 0.4);
+    box-shadow: inset 0 0 0 1px var(--accent-line);
   }
   .toggle.partial .knob {
     left: 50%;
-    background: var(--mint);
+    background: var(--accent-text);
   }
   .toggle.busy .knob {
     animation: pulse 900ms ease-in-out infinite;

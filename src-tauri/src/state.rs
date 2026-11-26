@@ -4,6 +4,7 @@ use crate::error::Result;
 use crate::google::{self, Catalog};
 use crate::library::Library;
 use crate::model::*;
+use crate::settings::{self, Settings};
 use parking_lot::{Mutex, RwLock};
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -18,6 +19,7 @@ pub struct AppState {
     pub catalog_file: PathBuf,
     /// Google families currently being downloaded (prevents double clicks).
     pub downloading: Mutex<HashSet<String>>,
+    pub settings: RwLock<Settings>,
 }
 
 impl AppState {
@@ -29,6 +31,7 @@ impl AppState {
 
         let db = Db::open(&data_dir.join("library.db"))?;
         let lib = Library::from_loaded(db.load()?);
+        let settings = Settings::parse(db.kv_get(settings::KEY));
         let activator = activation::platform(&data_dir)?;
         let catalog = google::load_cached(&catalog_file);
         let http = reqwest::Client::builder()
@@ -44,6 +47,7 @@ impl AppState {
             google_dir,
             catalog_file,
             downloading: Mutex::new(HashSet::new()),
+            settings: RwLock::new(settings),
         })
     }
 
@@ -56,6 +60,16 @@ impl AppState {
             .filter_map(|id| lib.faces.get(id))
             .collect();
         self.activator.sync(&faces)
+    }
+
+    /// Pull every font out of the OS without touching the saved state.
+    pub fn release_all(&self) {
+        let lib = self.lib.read();
+        let faces: Vec<&Face> = lib.active.iter().filter_map(|id| lib.faces.get(id)).collect();
+        if let Err(e) = self.activator.deactivate(&faces) {
+            log::error!("deactivate on exit failed: {e}");
+        }
+        self.activator.flush();
     }
 
     /// Activate/deactivate faces: OS first, then persistence + index.
