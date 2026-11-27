@@ -1,0 +1,20 @@
+{
+  "app": {
+    "windows": [
+      {
+        "title": "Fontin",
+        "width": 1360,
+        "height": 864,
+        "minWidth": 1024,
+        "minHeight": 640,
+        "backgroundColor": "#08090b",
+        "center": true,
+        "visible": false,
+        "label": "main",
+        "dragDropEnabled": false,
+        "decorations": false,
+        "shadow": true
+      }
+    ]
+  }
+}

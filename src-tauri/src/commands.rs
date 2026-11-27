@@ -686,3 +686,14 @@ pub async fn set_language(app: AppHandle, state: St<'_>, language: String) -> Re
     crate::tray::refresh_tray(&app);
     Ok(())
 }
+
+/// Whether this install can update itself. On Linux only the AppImage can;
+/// .deb/.rpm/AUR installs are updated by the package manager.
+#[tauri::command]
+pub fn self_update_supported() -> bool {
+    if cfg!(target_os = "linux") {
+        std::env::var_os("APPIMAGE").is_some()
+    } else {
+        true
+    }
+}

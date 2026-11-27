@@ -3,6 +3,10 @@ import type { Dict } from "./pt-BR";
 export const es: Dict = {
   "nav.library": "Biblioteca",
   "nav.google": "Google Fonts",
+  "win.minimize": "Minimizar",
+  "win.maximize": "Maximizar",
+  "win.restore": "Restaurar",
+  "win.close": "Cerrar",
   "nav.settings": "Ajustes",
 
   "lib.activeNow": "{n} activas ahora",
@@ -143,6 +147,8 @@ export const es: Dict = {
   "upd.auto": "Fontin busca nuevas versiones en GitHub automáticamente.",
   "upd.install": "Actualizar y reiniciar",
   "upd.downloadingPct": "Descargando {p}%",
+  "upd.packageManaged": "Instalado desde un paquete (.deb): descarga nuevas versiones en la página de Releases.",
+  "upd.releases": "Abrir Releases",
   "upd.checking": "Comprobando…",
   "upd.check": "Comprobar ahora",
   "upd.bannerTitle": "Fontin {v} disponible",

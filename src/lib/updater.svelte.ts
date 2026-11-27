@@ -3,6 +3,7 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { toast } from "./store.svelte";
 import { t } from "./i18n.svelte";
+import { api } from "./api";
 
 export const updater = $state({
   available: null as { version: string; notes: string } | null,
@@ -10,6 +11,8 @@ export const updater = $state({
   /** 0..1 while downloading, null otherwise */
   progress: null as number | null,
   dismissed: false,
+  /** false for .deb/.rpm installs: updates come from the package manager. */
+  supported: true,
 });
 
 let pending: Update | null = null;
@@ -54,8 +57,9 @@ export async function installUpdate() {
 }
 
 /** Check shortly after start, then every 6 hours. Skipped in `tauri dev`. */
-export function startUpdateChecks() {
-  if (import.meta.env.DEV) return;
+export async function startUpdateChecks() {
+  updater.supported = await api.selfUpdateSupported().catch(() => true);
+  if (import.meta.env.DEV || !updater.supported) return;
   setTimeout(() => checkForUpdates(), 5_000);
   setInterval(() => checkForUpdates(), 6 * 60 * 60 * 1000);
 }

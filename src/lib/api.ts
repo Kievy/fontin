@@ -126,6 +126,7 @@ export interface AddResult {
 export const api = {
   getSettings: () => invoke<AppSettings>("get_settings"),
   setSettings: (settings: AppSettings) => invoke<void>("set_settings", { settings }),
+  selfUpdateSupported: () => invoke<boolean>("self_update_supported"),
   setLanguage: (language: string) => invoke<void>("set_language", { language }),
   addFiles: (paths: string[]) => invoke<AddResult>("add_files", { paths }),
   overview: () => invoke<Overview>("overview"),

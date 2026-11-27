@@ -8,8 +8,10 @@
   import Toasts from "$lib/components/Toasts.svelte";
   import Settings from "$lib/components/Settings.svelte";
   import UpdateBanner from "$lib/components/UpdateBanner.svelte";
+  import TitleBar from "$lib/components/TitleBar.svelte";
+  import { customTitleBar } from "$lib/platform";
   import { startUpdateChecks } from "$lib/updater.svelte";
-  import { init, ui, data, select } from "$lib/store.svelte";
+  import { init, ui, data, select, setScope } from "$lib/store.svelte";
 
   let searchEl: HTMLInputElement | undefined = $state();
 
@@ -23,6 +25,12 @@
     if (!typing && (e.key === "/" || ((e.ctrlKey || e.metaKey) && e.key === "k"))) {
       e.preventDefault();
       searchEl?.focus();
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === "1" || e.key === "2" || e.key === ",")) {
+      // Ctrl/⌘+1 Library · Ctrl/⌘+2 Google Fonts · Ctrl/⌘+, Settings
+      e.preventDefault();
+      ui.settingsOpen = e.key === ",";
+      if (e.key === "1") setScope({ kind: "all" });
+      if (e.key === "2") setScope({ kind: "google" }, "google");
     } else if (!typing && e.key === "Escape" && ui.selected) {
       select(null);
     }
@@ -31,7 +39,9 @@
 
 <svelte:window onkeydown={onKey} />
 
-<div class="app">
+<div class="shell">
+{#if customTitleBar}<TitleBar />{/if}
+<div class="app" class:framed={customTitleBar}>
   <Rail />
   {#if !ui.settingsOpen}<Sidebar />{/if}
   <main>
@@ -45,18 +55,29 @@
   </main>
   {#if data.detail && !ui.settingsOpen}<DetailPanel />{/if}
 </div>
+</div>
 <Toasts />
 <UpdateBanner />
 
 <style>
-  .app {
+  .shell {
     height: 100vh;
     display: flex;
-    gap: var(--sp-8);
-    padding: var(--sp-8);
+    flex-direction: column;
     background:
       radial-gradient(1200px 600px at 100% -10%, var(--aura-bg), transparent 60%),
       var(--bg);
+  }
+  .app {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    gap: var(--sp-8);
+    padding: var(--sp-8);
+  }
+  /* The title bar above already provides the top spacing. */
+  .app.framed {
+    padding-top: 0;
   }
   main {
     position: relative;

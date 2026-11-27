@@ -3,6 +3,7 @@
   import Toggle from "./Toggle.svelte";
   import { onMount } from "svelte";
   import { getVersion } from "@tauri-apps/api/app";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import { updater, checkForUpdates, installUpdate } from "$lib/updater.svelte";
   import { api, type AppSettings } from "$lib/api";
   import { data, toast, prefs, setTheme, setLanguage } from "$lib/store.svelte";
@@ -128,14 +129,20 @@
         <div class="text">
           <span class="title">{t("set.version", { v: version })}</span>
           <span class="desc">
-            {#if updater.available}
+            {#if !updater.supported}
+              {t("upd.packageManaged")}
+            {:else if updater.available}
               {t("upd.available", { v: updater.available.version })}
             {:else}
               {t("upd.auto")}
             {/if}
           </span>
         </div>
-        {#if updater.available}
+        {#if !updater.supported}
+          <button class="btn" onclick={() => openUrl("https://github.com/Kievy/fontin/releases/latest")}>
+            {t("upd.releases")}
+          </button>
+        {:else if updater.available}
           <button class="btn primary" disabled={updater.progress !== null} onclick={installUpdate}>
             {updater.progress === null ? t("upd.install") : t("upd.downloadingPct", { p: Math.round(updater.progress * 100) })}
           </button>

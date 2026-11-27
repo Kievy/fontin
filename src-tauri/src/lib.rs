@@ -93,6 +93,7 @@ pub fn run() {
             commands::add_files,
             commands::allow_duplicates,
             commands::set_language,
+            commands::self_update_supported,
             commands::rescan_source,
             commands::remove_source,
             commands::create_collection,

@@ -2,6 +2,10 @@
 export const ptBR = {
   "nav.library": "Biblioteca",
   "nav.google": "Google Fonts",
+  "win.minimize": "Minimizar",
+  "win.maximize": "Maximizar",
+  "win.restore": "Restaurar",
+  "win.close": "Fechar",
   "nav.settings": "Configurações",
 
   "lib.activeNow": "{n} ativas agora",
@@ -142,6 +146,8 @@ export const ptBR = {
   "upd.auto": "O Fontin verifica novas versões no GitHub automaticamente.",
   "upd.install": "Atualizar e reiniciar",
   "upd.downloadingPct": "Baixando {p}%",
+  "upd.packageManaged": "Instalado por pacote (.deb): baixe novas versões na página de Releases.",
+  "upd.releases": "Abrir Releases",
   "upd.checking": "Verificando…",
   "upd.check": "Verificar agora",
   "upd.bannerTitle": "Fontin {v} disponível",
