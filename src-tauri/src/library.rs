@@ -343,9 +343,11 @@ impl Library {
 
     /// Directory tree under a source root, counting families per folder.
     fn folder_tree(&self, root: &Path, fams: &[&Family]) -> Vec<FolderNode> {
-        let mut counts: BTreeMap<PathBuf, u32> = BTreeMap::new();
+        // (families, active families) per directory.
+        let mut counts: BTreeMap<PathBuf, (u32, u32)> = BTreeMap::new();
         let mut dirs: HashSet<&Path> = HashSet::new();
         for fam in fams {
+            let on = (self.active_state(fam) > 0) as u32;
             dirs.clear();
             for id in &fam.faces {
                 let mut cur = self.faces[id].path.parent();
@@ -358,7 +360,9 @@ impl Library {
                 }
             }
             for d in &dirs {
-                *counts.entry(d.to_path_buf()).or_default() += 1;
+                let c = counts.entry(d.to_path_buf()).or_default();
+                c.0 += 1;
+                c.1 += on;
             }
         }
         build_children(root, &counts)
@@ -426,7 +430,7 @@ impl Library {
     }
 }
 
-fn build_children(parent: &Path, counts: &BTreeMap<PathBuf, u32>) -> Vec<FolderNode> {
+fn build_children(parent: &Path, counts: &BTreeMap<PathBuf, (u32, u32)>) -> Vec<FolderNode> {
     // Paths sharing a prefix are contiguous in a BTreeMap, so only scan that range.
     counts
         .range(parent.to_path_buf()..)
@@ -438,7 +442,8 @@ fn build_children(parent: &Path, counts: &BTreeMap<PathBuf, u32>) -> Vec<FolderN
                 .file_name()
                 .map(|s| s.to_string_lossy().into_owned())
                 .unwrap_or_default(),
-            count: *n,
+            count: n.0,
+            active: n.1,
             children: build_children(p, counts),
         })
         .collect()

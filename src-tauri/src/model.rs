@@ -220,6 +220,7 @@ pub struct FolderNode {
     pub path: String,
     pub name: String,
     pub count: u32,
+    pub active: u32,
     pub children: Vec<FolderNode>,
 }
 

@@ -1,3 +1,4 @@
+import { SvelteSet } from "svelte/reactivity";
 import { listen } from "@tauri-apps/api/event";
 import {
   api,
@@ -25,6 +26,7 @@ interface Prefs {
   size: number;
   view: View;
   theme: ThemePref;
+  sidebarWidth: number;
 }
 
 const DEFAULT_PREFS: Prefs = {
@@ -33,6 +35,7 @@ const DEFAULT_PREFS: Prefs = {
   size: 40,
   view: "list",
   theme: "system",
+  sidebarWidth: 264,
 };
 
 function readPrefs(): Prefs {
@@ -274,4 +277,26 @@ export async function init() {
     }),
   ]);
   await Promise.all([refreshOverview(), refreshRows()]);
+}
+
+/** Folder/source toggles currently in flight, keyed "source:folder". */
+export const locationBusy = new SvelteSet<string>();
+
+/** 0 off · 1 some families active · 2 all active (as the Toggle expects). */
+export function locationLevel(active: number, count: number): 0 | 1 | 2 {
+  return active === 0 ? 0 : active >= count ? 2 : 1;
+}
+
+/** Activates a whole source or a folder in it, or deactivates it when everything is already on. */
+export async function toggleLocation(source: number, folder: string | null, level: 0 | 1 | 2) {
+  const key = `${source}:${folder ?? ""}`;
+  if (locationBusy.has(key)) return;
+  locationBusy.add(key);
+  try {
+    await api.setLocationActive(source, folder, level !== 2);
+  } catch (e) {
+    toast(String(e), "error");
+  } finally {
+    locationBusy.delete(key);
+  }
 }

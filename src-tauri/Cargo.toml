@@ -1,6 +1,6 @@
 [package]
 name = "fontin"
-version = "0.1.2"
+version = "0.1.3"
 description = "Fontin — gerenciador de fontes open source: ative sem instalar"
 authors = ["Fontin contributors"]
 license = "MIT"

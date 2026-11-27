@@ -1,12 +1,19 @@
 <script lang="ts">
   import Self from "./FolderTree.svelte";
   import NavItem from "./NavItem.svelte";
+  import Toggle from "./Toggle.svelte";
   import Chevron from "@lucide/svelte/icons/chevron-right";
+  import { t } from "$lib/i18n.svelte";
   import type { FolderNode } from "$lib/api";
-  import { ui, setScope, isScope } from "$lib/store.svelte";
+  import { ui, setScope, isScope, locationBusy, locationLevel, toggleLocation } from "$lib/store.svelte";
   import { SvelteSet } from "svelte/reactivity";
 
-  let { nodes, depth = 1, open }: { nodes: FolderNode[]; depth?: number; open: SvelteSet<string> } = $props();
+  let {
+    nodes,
+    source,
+    depth = 1,
+    open,
+  }: { nodes: FolderNode[]; source: number; depth?: number; open: SvelteSet<string> } = $props();
 </script>
 
 {#each nodes as node (node.path)}
@@ -36,10 +43,20 @@
         <span class="dot"></span>
       {/if}
     {/snippet}
+    {#snippet trailing()}
+      {@const level = locationLevel(node.active, node.count)}
+      <Toggle
+        size="sm"
+        state={level}
+        busy={locationBusy.has(`${source}:${node.path}`)}
+        label={level === 2 ? t("side.deactivateFolder") : t("side.activateFolder")}
+        onchange={() => toggleLocation(source, node.path, level)}
+      />
+    {/snippet}
     {node.name}
   </NavItem>
   {#if node.children.length && open.has(node.path)}
-    <Self nodes={node.children} depth={depth + 1} {open} />
+    <Self nodes={node.children} {source} depth={depth + 1} {open} />
   {/if}
 {/each}
 

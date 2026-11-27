@@ -26,6 +26,9 @@ export const en: Dict = {
   "side.rescan": "Rescan",
   "side.removeFolder": "Remove",
   "side.confirmRemove": "Remove “{name}” from the library? Files are not deleted.",
+  "side.activateFolder": "Activate whole folder",
+  "side.deactivateFolder": "Deactivate whole folder",
+  "side.resize": "Drag to resize · double-click to reset",
   "side.looseFiles": "Individual fonts",
 
   "add.button": "Add",

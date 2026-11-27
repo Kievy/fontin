@@ -25,6 +25,9 @@ export const ptBR = {
   "side.rescan": "Reescanear",
   "side.removeFolder": "Remover",
   "side.confirmRemove": "Remover “{name}” da biblioteca? Os arquivos não são apagados.",
+  "side.activateFolder": "Ativar pasta inteira",
+  "side.deactivateFolder": "Desativar pasta inteira",
+  "side.resize": "Arraste para ajustar a largura · clique duplo para restaurar",
   "side.looseFiles": "Fontes avulsas",
 
   "add.button": "Adicionar",

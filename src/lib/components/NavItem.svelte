@@ -8,6 +8,7 @@
     depth = 0,
     icon,
     actions,
+    trailing,
     children,
     onclick,
     ondropfamily,
@@ -17,6 +18,8 @@
     depth?: number;
     icon?: Snippet;
     actions?: Snippet;
+    /** Always visible after the count/actions (e.g. a toggle). */
+    trailing?: Snippet;
     children: Snippet;
     onclick?: () => void;
     /** Makes the item a drop target for families dragged from the list. */
@@ -61,6 +64,7 @@
     {#if count !== null}<span class="count tabular">{count.toLocaleString("pt-BR")}</span>{/if}
   </button>
   {#if actions}<span class="actions">{@render actions()}</span>{/if}
+  {#if trailing}<span class="trailing">{@render trailing()}</span>{/if}
 </div>
 
 <style>
@@ -141,6 +145,16 @@
   }
   .nav:hover .count {
     display: none;
+  }
+  .trailing {
+    display: flex;
+    padding-right: var(--sp-8);
+  }
+  .nav:has(.trailing) .main {
+    padding-right: var(--sp-8);
+  }
+  .nav:has(.trailing):hover .actions {
+    padding-right: var(--sp-4);
   }
   .nav:has(.actions):hover .main {
     padding-right: 0;

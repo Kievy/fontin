@@ -44,6 +44,7 @@ export interface FolderNode {
   path: string;
   name: string;
   count: number;
+  active: number;
   children: FolderNode[];
 }
 
@@ -134,6 +135,8 @@ export const api = {
   detail: (id: string) => invoke<FamilyDetail | null>("family_detail", { id }),
   setFamilyActive: (id: string, active: boolean) => invoke<void>("set_family_active", { id, active }),
   setFamiliesActive: (ids: string[], active: boolean) => invoke<void>("set_families_active", { ids, active }),
+  setLocationActive: (source: number, folder: string | null, active: boolean) =>
+    invoke<void>("set_location_active", { source, folder, active }),
   setFaceActive: (id: string, active: boolean) => invoke<void>("set_face_active", { id, active }),
   toggleFavorite: (id: string) => invoke<boolean>("toggle_favorite", { id }),
   addFolder: (path: string) => invoke<AddResult>("add_folder", { path }),

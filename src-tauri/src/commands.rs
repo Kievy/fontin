@@ -145,6 +145,33 @@ pub async fn set_families_active(
     Ok(())
 }
 
+/// Turns on/off every face of a source, or only those under `folder` inside it.
+#[tauri::command]
+pub async fn set_location_active(
+    app: AppHandle,
+    state: St<'_>,
+    source: SourceId,
+    folder: Option<String>,
+    active: bool,
+) -> Result<()> {
+    let state = state.inner().clone();
+    let dir = folder.map(PathBuf::from);
+    let face_ids: Vec<FaceId> = {
+        let lib = state.lib.read();
+        lib.faces
+            .values()
+            .filter(|f| f.source_id == source)
+            .filter(|f| dir.as_deref().is_none_or(|d| f.path.starts_with(d)))
+            .map(|f| f.id)
+            .collect()
+    };
+    tokio::task::spawn_blocking(move || state.set_faces_active(&face_ids, active))
+        .await
+        .map_err(|e| Error::msg(e.to_string()))??;
+    let _ = app.emit(EV_LIBRARY, ());
+    Ok(())
+}
+
 async fn download_google(
     app: &AppHandle,
     state: &Arc<AppState>,

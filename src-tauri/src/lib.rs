@@ -88,6 +88,7 @@ pub fn run() {
             commands::set_family_active,
             commands::set_face_active,
             commands::set_families_active,
+            commands::set_location_active,
             commands::toggle_favorite,
             commands::add_folder,
             commands::add_files,

@@ -26,6 +26,9 @@ export const es: Dict = {
   "side.rescan": "Volver a escanear",
   "side.removeFolder": "Quitar",
   "side.confirmRemove": "¿Quitar “{name}” de la biblioteca? Los archivos no se borran.",
+  "side.activateFolder": "Activar carpeta entera",
+  "side.deactivateFolder": "Desactivar carpeta entera",
+  "side.resize": "Arrastra para ajustar el ancho · doble clic para restablecer",
   "side.looseFiles": "Fuentes sueltas",
 
   "add.button": "Añadir",

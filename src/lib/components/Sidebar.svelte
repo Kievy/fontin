@@ -10,6 +10,7 @@
   import FolderIcon from "@lucide/svelte/icons/folder";
   import FileType from "@lucide/svelte/icons/file-type";
   import AddMenu from "./AddMenu.svelte";
+  import Toggle from "./Toggle.svelte";
   import { t } from "$lib/i18n.svelte";
   import Refresh from "@lucide/svelte/icons/refresh-cw";
   import Trash from "@lucide/svelte/icons/trash-2";
@@ -18,7 +19,59 @@
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import { SvelteSet } from "svelte/reactivity";
   import { api, type Scope } from "$lib/api";
-  import { data, ui, drag, setScope, isScope, toast, refreshAll, addToCollection, addToFavorites, offerDuplicates } from "$lib/store.svelte";
+  import {
+    data,
+    ui,
+    drag,
+    prefs,
+    savePrefs,
+    setScope,
+    isScope,
+    toast,
+    refreshAll,
+    addToCollection,
+    addToFavorites,
+    offerDuplicates,
+    locationBusy,
+    locationLevel,
+    toggleLocation,
+  } from "$lib/store.svelte";
+
+  // Resizable width, snapped to the 8px grid.
+  const MIN_W = 224;
+  const MAX_W = 480;
+  const DEFAULT_W = 264;
+  const clampW = (w: number) => Math.min(MAX_W, Math.max(MIN_W, Math.round(w / 8) * 8));
+  let resizing = $state(false);
+
+  function startResize(e: PointerEvent) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    const startW = prefs.sidebarWidth;
+    resizing = true;
+    const move = (ev: PointerEvent) => (prefs.sidebarWidth = clampW(startW + ev.clientX - startX));
+    const up = () => {
+      resizing = false;
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      el.removeEventListener("pointercancel", up);
+      savePrefs();
+    };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+  }
+
+  function resizeKey(e: KeyboardEvent) {
+    const step = e.key === "ArrowLeft" ? -8 : e.key === "ArrowRight" ? 8 : 0;
+    if (!step) return;
+    e.preventDefault();
+    prefs.sidebarWidth = clampW(prefs.sidebarWidth + step);
+    savePrefs();
+  }
 
   const COLORS = ["#7df2a6", "#7cc4ff", "#b99cff", "#ffb86b", "#ff7aa8", "#f4f4f0"];
   const CATEGORIES = $derived([
@@ -126,6 +179,7 @@
   }
 </script>
 
+<div class="side-wrap" class:resizing style="--w: {clampW(prefs.sidebarWidth)}px">
 <aside class="sidebar">
   {#if ui.section === "library"}
     <header>
@@ -226,9 +280,19 @@
                 onclick={() => removeSource(s.id, s.kind === "files" ? t("side.looseFiles") : s.name)}><Trash size={14} /></button
               >
             {/snippet}
+            {#snippet trailing()}
+              {@const level = locationLevel(s.active, s.count)}
+              <Toggle
+                size="sm"
+                state={level}
+                busy={locationBusy.has(`${s.id}:`)}
+                label={level === 2 ? t("side.deactivateFolder") : t("side.activateFolder")}
+                onchange={() => toggleLocation(s.id, null, level)}
+              />
+            {/snippet}
             {s.kind === "files" ? t("side.looseFiles") : s.name}
           </NavItem>
-          <FolderTree nodes={s.tree} open={openFolders} />
+          <FolderTree nodes={s.tree} source={s.id} open={openFolders} />
         {/each}
       </section>
     </div>
@@ -290,11 +354,36 @@
     </footer>
   {/if}
 </aside>
+<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+<div
+  class="resizer"
+  role="separator"
+  aria-orientation="vertical"
+  aria-valuenow={prefs.sidebarWidth}
+  aria-valuemin={MIN_W}
+  aria-valuemax={MAX_W}
+  aria-label={t("side.resize")}
+  title={t("side.resize")}
+  tabindex="0"
+  onpointerdown={startResize}
+  ondblclick={() => {
+    prefs.sidebarWidth = DEFAULT_W;
+    savePrefs();
+  }}
+  onkeydown={resizeKey}
+></div>
+</div>
 
 <style>
-  .sidebar {
-    width: 264px;
+  .side-wrap {
+    position: relative;
     flex: none;
+    display: flex;
+    width: var(--w);
+  }
+  .sidebar {
+    flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     background: var(--panel);
@@ -419,6 +508,43 @@
   .add:hover {
     color: var(--text);
     background: var(--raised-2);
+  }
+  /* Sits in the 8px gap between the sidebar and the main panel. */
+  .resizer {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: calc(var(--sp-8) * -1);
+    width: var(--sp-8);
+    cursor: col-resize;
+    z-index: 2;
+    outline: none;
+    touch-action: none;
+  }
+  .resizer::after {
+    content: "";
+    position: absolute;
+    top: var(--sp-16);
+    bottom: var(--sp-16);
+    left: 50%;
+    width: 2px;
+    margin-left: -1px;
+    border-radius: 2px;
+    background: var(--mint);
+    opacity: 0;
+    transition: opacity 140ms var(--ease);
+  }
+  .resizer:hover::after,
+  .resizer:focus-visible::after,
+  .resizing .resizer::after {
+    opacity: 0.8;
+    box-shadow: 0 0 8px var(--mint-glow);
+  }
+  .resizing {
+    user-select: none;
+  }
+  :global(body:has(.side-wrap.resizing)) {
+    cursor: col-resize;
   }
   .spin {
     display: grid;
